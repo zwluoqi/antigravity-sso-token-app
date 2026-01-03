@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity Account Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <!-- 导航栏 -->
+        <nav class="navigation">
+            <div class="nav-brand">
+                <h1>Antigravity Account Manager</h1>
+            </div>
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="token-manager">
+                    <span class="nav-icon">🔑</span>
+                    令牌管理
+                </button>
+                <button class="nav-tab" data-tab="ssh-sync">
+                    <span class="nav-icon">🔄</span>
+                    SSH同步
+                </button>
+            </div>
+        </nav>
+
+        <!-- 标签页内容 -->
+        <div class="tab-content">
+            <!-- 令牌管理标签页 -->
+            <div id="token-manager" class="tab-pane active">
+                <!-- 主要内容区域 -->
+                <main class="main-content">
+                    <!-- 状态卡片 -->
+                    <div class="status-cards">
+                        <div class="card status-card">
+                            <div class="card-header">
+                                <h3>当前账号状态</h3>
+                                <div class="card-header-actions">
+                                    <span id="tokenStatus" class="status-badge status-unknown">未知</span>
+                                    <button id="manualRefreshBtn" class="btn btn-outline btn-sm">
+                                        <span class="icon">🔄</span>
+                                        刷新当前账号状态
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="status-info">
+                                    <div class="info-item">
+                                        <label>账号ID:</label>
+                                        <span id="currentTokenId">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <label>过期时间:</label>
+                                        <span id="tokenExpiry">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <label>最后更新:</label>
+                                        <span id="lastUpdate">-</span>
+                                    </div>
+                                    <!-- Usage Data Section -->
+                                    <div class="usage-data-section" id="usageDataSection" style="display: none;">
+                                        <div class="usage-title">使用量统计</div>
+                                        <div id="usageDataContainer" class="usage-data-container">
+                                            <!-- Usage data will be populated here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card server-card">
+                            <div class="card-header">
+                                <h3>服务器连接</h3>
+                                <div class="card-header-actions">
+                                    <span id="serverStatus" class="status-badge status-unknown">未连接</span>
+                                    <button id="settingsBtn" class="btn btn-secondary btn-sm">
+                                        <span class="icon">⚙️</span>
+                                        设置
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="server-info">
+                                    <div class="info-item">
+                                        <label>连接状态:</label>
+                                        <span id="connectionStatus">未测试</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <label>SSO Token到期:</label>
+                                        <span id="ssoTokenExpiry">-</span>
+                                    </div>
+                                    <!-- SSO Usage Data Section -->
+                                    <div class="usage-data-section" id="ssoUsageSection" style="display: none;">
+                                        <div class="usage-title">SSO使用量统计</div>
+                                        <div id="ssoUsageContainer" class="usage-data-container">
+                                            <!-- SSO usage data will be populated here -->
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-actions">
+                                    <button id="testConnectionBtn" class="btn btn-outline">测试连接</button>
+                                    <button id="renew24HourBtn" class="btn btn-warning btn-sm">
+                                        <span class="icon">💳</span>
+                                        24小时续费
+                                    </button>
+                                    <button id="renew30DayBtn" class="btn btn-info btn-sm">
+                                        <span class="icon">💳</span>
+                                        30天续费
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 操作区域 -->
+                    <div class="action-section">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>账号操作</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="action-buttons">
+                                    <button id="requestNewTokenBtn" class="btn btn-success">
+                                        <span class="icon">📥</span>
+                                        申请新账号
+                                    </button>
+                                    <!-- <button id="openCacheDirBtn" class="btn btn-secondary">
+                                <span class="icon">📁</span>
+                                打开缓存目录
+                            </button> -->
+                                    <button id="closeAntigravityBtn" class="btn btn-danger">
+                                        <span class="icon">🛑</span>
+                                        关闭Antigravity进程
+                                    </button>
+                                    <button id="restartAntigravityBtn" class="btn btn-success">
+                                        <span class="icon">🔄</span>
+                                        重启Antigravity进程
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 日志区域 -->
+                    <div class="log-section">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>操作日志</h3>
+                                <button id="clearLogBtn" class="btn btn-sm btn-outline">清空日志</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="logContainer" class="log-container">
+                                    <div class="log-entry log-info">
+                                        <span class="log-time">[${new Date().toLocaleTimeString()}]</span>
+                                        <span class="log-message">应用已启动</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+
+            <!-- 模态框 -->
+            <div id="modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="modalTitle">标题</h3>
+                        <button id="modalCloseBtn" class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body" id="modalBody">
+                        <!-- 动态内容 -->
+                    </div>
+                    <div class="modal-footer">
+                        <button id="modalCancelBtn" class="btn btn-secondary">取消</button>
+                        <button id="modalConfirmBtn" class="btn btn-primary">确定</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设置模态框 -->
+            <div id="settingsModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>应用设置</h3>
+                        <button id="settingsModalCloseBtn" class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="ssoTokenInput">SSO Token:</label>
+                            <input type="text" id="ssoTokenInput" class="form-control" placeholder="请输入SSO Token"
+                                autocomplete="off">
+                            <small class="form-text">用于身份验证的SSO Token，从管理员处获取</small>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="autoRefreshCheckbox">
+                                自动刷新当前账号状态（当账号权限即将过期时）
+                            </label>
+                        </div>
+
+                        <!-- <div class="form-group">
+                    <label for="refreshIntervalInput">刷新间隔（分钟）:</label>
+                    <input type="number" id="refreshIntervalInput" class="form-control" min="1" max="60" value="30">
+                </div> -->
+                    </div>
+                    <div class="modal-footer">
+                        <button id="settingsModalCancelBtn" class="btn btn-secondary">取消</button>
+                        <button id="settingsModalSaveBtn" class="btn btn-primary">保存</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SSO Token 输入模态框 -->
+            <div id="ssoTokenModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>输入 SSO Token</h3>
+                        <button id="ssoTokenModalCloseBtn" class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="ssoTokenQuickInput">SSO Token:</label>
+                            <input type="text" id="ssoTokenQuickInput" class="form-control" placeholder="请输入SSO Token"
+                                autocomplete="off">
+                            <small class="form-text">用于身份验证的SSO Token，从管理员处获取</small>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="rememberSsoToken">
+                                记住此Token（保存到设置中）
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button id="ssoTokenModalCancelBtn" class="btn btn-secondary">取消</button>
+                        <button id="ssoTokenModalConfirmBtn" class="btn btn-primary">确定并申请Token</button>
+                    </div>
+                </div>
+            </div>
+
+            </main>
+        </div>
+
+        <!-- SSH同步标签页 -->
+        <div id="ssh-sync" class="tab-pane">
+            <div class="ssh-sync-content">
+                <header class="ssh-header">
+                    <h2>SSH令牌同步</h2>
+                    <p class="ssh-subtitle">将本地Token同步到远程服务器</p>
+                </header>
+
+                <div class="ssh-main-content">
+                    <!-- SSH连接配置区域 -->
+                    <section class="ssh-config-section">
+                        <h3>SSH连接配置</h3>
+                        <form id="ssh-config-form" class="ssh-config-form">
+                            <div class="ssh-form-group">
+                                <label for="ssh-host">服务器地址 *</label>
+                                <input type="text" id="ssh-host" name="host" placeholder="例如: example.com" required>
+                            </div>
+
+                            <div class="ssh-form-row">
+                                <div class="ssh-form-group">
+                                    <label for="ssh-port">端口</label>
+                                    <input type="number" id="ssh-port" name="port" placeholder="22" min="1" max="65535"
+                                        value="22">
+                                </div>
+                                <div class="ssh-form-group">
+                                    <label for="ssh-username">用户名 *</label>
+                                    <input type="text" id="ssh-username" name="username" placeholder="用户名" required>
+                                </div>
+                            </div>
+
+                            <div class="ssh-form-group">
+                                <label for="ssh-password">密码 *</label>
+                                <input type="password" id="ssh-password" name="password" placeholder="SSH密码" required>
+                                <small class="ssh-form-hint">密码将被安全加密存储</small>
+                            </div>
+
+                            <div class="ssh-form-group">
+                                <label for="ssh-remote-path">远程目录路径</label>
+                                <input type="text" id="ssh-remote-path" name="remotePath" placeholder="~/.antigravity_tools"
+                                    value="~/.antigravity_tools">
+                                <small class="ssh-form-hint">Token文件将被上传到此目录</small>
+                            </div>
+
+                            <div class="ssh-form-group">
+                                <label class="ssh-checkbox-label">
+                                    <input type="checkbox" id="auto-sync" name="autoSync">
+                                    <span class="ssh-checkmark"></span>
+                                    启用自动同步
+                                </label>
+                                <small class="ssh-form-hint">当本地令牌文件更新时自动同步到远程服务器</small>
+                            </div>
+
+                            <div class="ssh-form-actions">
+                                <button type="button" id="test-connection" class="btn btn-secondary">
+                                    <span class="btn-icon">🔗</span>
+                                    测试连接
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <span class="btn-icon">💾</span>
+                                    保存配置
+                                </button>
+                            </div>
+                        </form>
+
+                        <!-- 连接状态显示 -->
+                        <div id="connection-status" class="ssh-status-display">
+                            <div class="ssh-status-item">
+                                <span class="ssh-status-label">连接状态:</span>
+                                <span id="connection-indicator" class="ssh-status-indicator disconnected">未连接</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- 文件同步区域 -->
+                    <section class="ssh-sync-section">
+                        <h3>文件同步</h3>
+
+                        <!-- 同步控制 -->
+                        <div class="ssh-sync-controls">
+                            <button id="manual-sync" class="btn btn-primary btn-large">
+                                <span class="btn-icon">🚀</span>
+                                立即同步
+                            </button>
+                            <button id="cancel-sync" class="btn btn-danger" disabled>
+                                <span class="btn-icon">⏹️</span>
+                                取消同步
+                            </button>
+                        </div>
+
+                        <!-- 文件信息 -->
+                        <div class="ssh-file-info">
+                            <div class="ssh-info-item">
+                                <span class="ssh-info-label">本地文件:</span>
+                                <span id="local-file-path" class="ssh-info-value">-</span>
+                                <span id="local-file-status" class="ssh-file-status checking">检查中...</span>
+                            </div>
+                            <div class="ssh-info-item">
+                                <span class="ssh-info-label">文件大小:</span>
+                                <span id="file-size" class="ssh-info-value">-</span>
+                            </div>
+                            <div class="ssh-info-item">
+                                <span class="ssh-info-label">最后修改:</span>
+                                <span id="file-mtime" class="ssh-info-value">-</span>
+                            </div>
+                        </div>
+
+                        <!-- 进度显示 -->
+                        <div id="progress-container" class="ssh-progress-container" style="display: none;">
+                            <div class="ssh-progress-header">
+                                <span id="progress-status" class="ssh-progress-status">准备中...</span>
+                                <span id="progress-percentage" class="ssh-progress-percentage">0%</span>
+                            </div>
+                            <div class="ssh-progress-bar">
+                                <div id="progress-fill" class="ssh-progress-fill"></div>
+                            </div>
+                            <div class="ssh-progress-details">
+                                <div class="ssh-detail-item">
+                                    <span class="ssh-detail-label">传输速度:</span>
+                                    <span id="transfer-speed" class="ssh-detail-value">-</span>
+                                </div>
+                                <div class="ssh-detail-item">
+                                    <span class="ssh-detail-label">已传输:</span>
+                                    <span id="transferred-size" class="ssh-detail-value">-</span>
+                                </div>
+                                <div class="ssh-detail-item">
+                                    <span class="ssh-detail-label">预计剩余:</span>
+                                    <span id="eta" class="ssh-detail-value">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- 传输历史区域 -->
+                    <section class="ssh-history-section">
+                        <div class="ssh-section-header">
+                            <h3>传输历史</h3>
+                            <button id="clear-history" class="btn btn-small btn-secondary">清除历史</button>
+                        </div>
+
+                        <div id="history-container" class="ssh-history-container">
+                            <div id="history-empty" class="ssh-empty-state">
+                                <span class="ssh-empty-icon">📋</span>
+                                <p>暂无传输历史</p>
+                            </div>
+                            <div id="history-list" class="ssh-history-list"></div>
+                        </div>
+
+                        <!-- 统计信息 -->
+                        <div class="ssh-stats-container">
+                            <div class="ssh-stat-item">
+                                <span class="ssh-stat-value" id="total-transfers">0</span>
+                                <span class="ssh-stat-label">总传输</span>
+                            </div>
+                            <div class="ssh-stat-item">
+                                <span class="ssh-stat-value" id="successful-transfers">0</span>
+                                <span class="ssh-stat-label">成功</span>
+                            </div>
+                            <div class="ssh-stat-item">
+                                <span class="ssh-stat-value" id="failed-transfers">0</span>
+                                <span class="ssh-stat-label">失败</span>
+                            </div>
+                            <div class="ssh-stat-item">
+                                <span class="ssh-stat-value" id="total-data">0 B</span>
+                                <span class="ssh-stat-label">总数据量</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- 操作日志区域 -->
+                    <section class="ssh-log-section">
+                        <div class="ssh-section-header">
+                            <h3>操作日志</h3>
+                            <button id="clear-logs" class="btn btn-small btn-secondary">清除日志</button>
+                        </div>
+
+                        <div id="log-container" class="ssh-log-container">
+                            <div id="log-entries" class="ssh-log-entries"></div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- 消息提示容器 -->
+                <div id="message-container" class="ssh-message-container"></div>
+
+                <!-- 确认对话框 -->
+                <div id="confirm-dialog" class="ssh-dialog-overlay" style="display: none;">
+                    <div class="ssh-dialog">
+                        <div class="ssh-dialog-header">
+                            <h3 id="confirm-title">确认操作</h3>
+                        </div>
+                        <div class="ssh-dialog-body">
+                            <p id="confirm-message">确定要执行此操作吗？</p>
+                        </div>
+                        <div class="ssh-dialog-actions">
+                            <button id="confirm-cancel" class="btn btn-secondary">取消</button>
+                            <button id="confirm-ok" class="btn btn-primary">确定</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载指示器 -->
+    <div id="loadingIndicator" class="loading-indicator">
+        <div class="spinner"></div>
+        <span>处理中...</span>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>

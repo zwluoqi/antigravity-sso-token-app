@@ -1,0 +1,148 @@
+{
+  "name": "antigravity-sso-token-app",
+  "version": "1.6.0",
+  "description": "Antigravity Account Manager - 跨平台native应用用于管理Antigravity Accounts",
+  "homepage": "https://github.com/antigravity-team/antigravity-sso-token-app",
+  "main": "src/main.js",
+  "scripts": {
+    "postinstall": "electron-rebuild",
+    "rebuild": "electron-rebuild",
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dev:utf8": "chcp 65001 && electron . --dev",
+    "start:utf8": "chcp 65001 && electron .",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win",
+    "build-win-no-sign": "node build-win-no-sign.js",
+    "build-mac": "electron-builder --mac",
+    "build-linux": "electron-builder --linux",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "build-all": "node build.js all",
+    "build-windows": "node build.js win",
+    "build-macos": "node build.js mac",
+    "build-ubuntu": "node build.js linux",
+    "test": "node test-app.js",
+    "test-tokens": "node ../test-token-functions.js",
+    "clean": "rimraf dist node_modules package-lock.json",
+    "reinstall": "npm run clean && npm install"
+  },
+  "keywords": [
+    "antigravity",
+    "oauth",
+    "token",
+    "manager",
+    "electron",
+    "cross-platform"
+  ],
+  "author": {
+    "name": "Antigravity Team",
+    "email": "support@antigravity-team.com"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "electron": "^27.3.11",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "chokidar": "^4.0.3",
+    "fs-extra": "^11.3.0",
+    "node-fetch": "^2.7.0",
+    "node-ssh": "^13.2.1"
+  },
+  "build": {
+    "appId": "com.antigravity.antigravity-account-manager",
+    "productName": "Antigravity Account Manager",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "forceCodeSigning": false,
+    "nodeGypRebuild": true,
+    "buildDependenciesFromSource": true,
+    "npmRebuild": true,
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "node_modules/**/*",
+      "!node_modules/.cache",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "extraResources": [
+      {
+        "from": "README.md",
+        "to": "README.md"
+      },
+      {
+        "from": "DEPLOYMENT.md",
+        "to": "DEPLOYMENT.md"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "publisherName": "Antigravity Team",
+      "verifyUpdateCodeSignature": false,
+      "sign": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Antigravity Account Manager"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development",
+      "maintainer": "Antigravity Team <support@antigravity-team.com>"
+    },
+    "publish": null
+  }
+}

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usage Data Display Test</title>
+    <link rel="stylesheet" href="src/renderer/styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <h1>Usage Data Display Test</h1>
+        </header>
+
+        <!-- 主要内容区域 -->
+        <main class="main-content">
+            <!-- 状态卡片 -->
+            <div class="status-cards">
+                <div class="card status-card">
+                    <div class="card-header">
+                        <h3>当前Token状态</h3>
+                        <span id="tokenStatus" class="status-badge status-active">有效</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="status-info">
+                            <div class="info-item">
+                                <label>Token ID:</label>
+                                <span id="currentTokenId">test-token-123</span>
+                            </div>
+                            <div class="info-item">
+                                <label>过期时间:</label>
+                                <span id="tokenExpiry">2025-08-18 12:38:08</span>
+                            </div>
+                            <div class="info-item">
+                                <label>最后更新:</label>
+                                <span id="lastUpdate">2025-08-17 12:38:08</span>
+                            </div>
+                        </div>
+                        <!-- Usage Data Section -->
+                        <div class="usage-data-section" id="usageDataSection">
+                            <div class="usage-title">使用量统计</div>
+                            <div id="usageDataContainer" class="usage-data-container">
+                                <!-- Test usage data will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 测试按钮 -->
+            <div class="action-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>测试操作</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="action-buttons">
+                            <button id="testUsageBtn" class="btn btn-success">
+                                <span class="icon">📊</span>
+                                显示测试使用量数据
+                            </button>
+                            <button id="clearUsageBtn" class="btn btn-secondary">
+                                <span class="icon">🗑️</span>
+                                清除使用量数据
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // 简化的工具函数
+        const utils = {
+            formatDate(date) {
+                if (!date) return '-';
+                const d = new Date(date);
+                if (isNaN(d.getTime())) return '-';
+                return d.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            }
+        };
+
+        // 简化的应用状态管理
+        class TestAppState {
+            constructor() {
+                this.usageData = null;
+            }
+
+            setUsageData(usageData) {
+                this.usageData = usageData;
+                this.updateUsageDisplay();
+            }
+
+            updateUsageDisplay() {
+                const usageDataSection = document.getElementById('usageDataSection');
+                const usageDataContainer = document.getElementById('usageDataContainer');
+                
+                if (this.usageData && Array.isArray(this.usageData) && this.usageData.length > 0) {
+                    // Show the usage data section
+                    usageDataSection.style.display = 'block';
+                    
+                    // Clear existing content
+                    usageDataContainer.innerHTML = '';
+                    
+                    // Create usage items for each resource type
+                    this.usageData.forEach(usage => {
+                        const usageItem = this.createUsageItem(usage);
+                        usageDataContainer.appendChild(usageItem);
+                    });
+                } else {
+                    // Hide the usage data section if no data
+                    usageDataSection.style.display = 'none';
+                }
+            }
+
+            createUsageItem(usage) {
+                const { resourceType, currentUsage, limit } = usage;
+                const percentage = limit > 0 ? Math.round((currentUsage / limit) * 100) : 0;
+                
+                // Determine the status class based on usage percentage
+                let statusClass = '';
+                if (percentage >= 90) {
+                    statusClass = 'usage-danger';
+                } else if (percentage >= 70) {
+                    statusClass = 'usage-warning';
+                }
+                
+                const usageItem = document.createElement('div');
+                usageItem.className = `usage-item ${statusClass}`;
+                
+                // Create resource type label
+                const usageType = document.createElement('div');
+                usageType.className = 'usage-type';
+                usageType.textContent = this.getResourceTypeLabel(resourceType);
+                
+                // Create usage stats container
+                const usageStats = document.createElement('div');
+                usageStats.className = 'usage-stats';
+                
+                // Create usage numbers
+                const usageNumbers = document.createElement('div');
+                usageNumbers.className = 'usage-numbers';
+                usageNumbers.textContent = `${currentUsage}/${limit}`;
+                
+                // Create progress bar
+                const usageProgress = document.createElement('div');
+                usageProgress.className = 'usage-progress';
+                
+                const progressBar = document.createElement('div');
+                progressBar.className = `usage-progress-bar ${statusClass}`;
+                progressBar.style.width = `${Math.min(percentage, 100)}%`;
+                
+                usageProgress.appendChild(progressBar);
+                
+                // Create percentage display
+                const usagePercentage = document.createElement('div');
+                usagePercentage.className = 'usage-percentage';
+                usagePercentage.textContent = `${percentage}%`;
+                
+                // Assemble the usage stats
+                usageStats.appendChild(usageNumbers);
+                usageStats.appendChild(usageProgress);
+                usageStats.appendChild(usagePercentage);
+                
+                // Assemble the usage item
+                usageItem.appendChild(usageType);
+                usageItem.appendChild(usageStats);
+                
+                return usageItem;
+            }
+
+            getResourceTypeLabel(resourceType) {
+                const labels = {
+                    'SPEC': 'SPEC',
+                    'VIBE': 'VIBE',
+                    'AGENTIC_REQUEST': '智能请求'
+                };
+                return labels[resourceType] || resourceType;
+            }
+        }
+
+        // 初始化测试应用
+        const testApp = new TestAppState();
+
+        // 测试数据
+        const testUsageData = [
+            {
+                resourceType: 'SPEC',
+                currentUsage: 25,
+                limit: 100
+            },
+            {
+                resourceType: 'VIBE',
+                currentUsage: 75,
+                limit: 100
+            },
+            {
+                resourceType: 'AGENTIC_REQUEST',
+                currentUsage: 95,
+                limit: 100
+            }
+        ];
+
+        // 事件监听器
+        document.getElementById('testUsageBtn').addEventListener('click', () => {
+            testApp.setUsageData(testUsageData);
+            console.log('显示测试使用量数据:', testUsageData);
+        });
+
+        document.getElementById('clearUsageBtn').addEventListener('click', () => {
+            testApp.setUsageData(null);
+            console.log('清除使用量数据');
+        });
+
+        // 初始化时隐藏使用量数据
+        document.getElementById('usageDataSection').style.display = 'none';
+    </script>
+</body>
+</html>

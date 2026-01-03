@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSH同步 - Antigravity Account Manager</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="ssh-sync.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>SSH令牌同步</h1>
+            <p class="subtitle">将本地current_token.json同步到远程服务器</p>
+        </header>
+
+        <main class="main-content">
+            <!-- SSH连接配置区域 -->
+            <section class="config-section">
+                <h2>SSH连接配置</h2>
+                <form id="ssh-config-form" class="config-form">
+                    <div class="form-group">
+                        <label for="ssh-host">服务器地址 *</label>
+                        <input type="text" id="ssh-host" name="host" placeholder="例如: example.com" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ssh-port">端口</label>
+                            <input type="number" id="ssh-port" name="port" placeholder="22" min="1" max="65535" value="22">
+                        </div>
+                        <div class="form-group">
+                            <label for="ssh-username">用户名 *</label>
+                            <input type="text" id="ssh-username" name="username" placeholder="用户名" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ssh-password">密码 *</label>
+                        <input type="password" id="ssh-password" name="password" placeholder="SSH密码" required>
+                        <small class="form-hint">密码将被安全加密存储</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ssh-remote-path">远程目录路径</label>
+                        <input type="text" id="ssh-remote-path" name="remotePath" placeholder="~/.antigravity_tools" value="~/.antigravity_tools">
+                        <small class="form-hint">current_token.json将被上传到此目录</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="auto-sync" name="autoSync">
+                            <span class="checkmark"></span>
+                            启用自动同步
+                        </label>
+                        <small class="form-hint">当本地令牌文件更新时自动同步到远程服务器</small>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" id="test-connection" class="btn btn-secondary">
+                            <span class="btn-icon">🔗</span>
+                            测试连接
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <span class="btn-icon">💾</span>
+                            保存配置
+                        </button>
+                    </div>
+                </form>
+
+                <!-- 连接状态显示 -->
+                <div id="connection-status" class="status-display">
+                    <div class="status-item">
+                        <span class="status-label">连接状态:</span>
+                        <span id="connection-indicator" class="status-indicator disconnected">未连接</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 文件同步区域 -->
+            <section class="sync-section">
+                <h2>文件同步</h2>
+                
+                <!-- 同步控制 -->
+                <div class="sync-controls">
+                    <button id="manual-sync" class="btn btn-primary btn-large">
+                        <span class="btn-icon">🚀</span>
+                        立即同步
+                    </button>
+                    <button id="cancel-sync" class="btn btn-danger" disabled>
+                        <span class="btn-icon">⏹️</span>
+                        取消同步
+                    </button>
+                </div>
+
+                <!-- 文件信息 -->
+                <div class="file-info">
+                    <div class="info-item">
+                        <span class="info-label">本地文件:</span>
+                        <span id="local-file-path" class="info-value">-</span>
+                        <span id="local-file-status" class="file-status">检查中...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">文件大小:</span>
+                        <span id="file-size" class="info-value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">最后修改:</span>
+                        <span id="file-mtime" class="info-value">-</span>
+                    </div>
+                </div>
+
+                <!-- 进度显示 -->
+                <div id="progress-container" class="progress-container" style="display: none;">
+                    <div class="progress-header">
+                        <span id="progress-status" class="progress-status">准备中...</span>
+                        <span id="progress-percentage" class="progress-percentage">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                    <div class="progress-details">
+                        <div class="detail-item">
+                            <span class="detail-label">传输速度:</span>
+                            <span id="transfer-speed" class="detail-value">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">已传输:</span>
+                            <span id="transferred-size" class="detail-value">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">预计剩余:</span>
+                            <span id="eta" class="detail-value">-</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 传输历史区域 -->
+            <section class="history-section">
+                <div class="section-header">
+                    <h2>传输历史</h2>
+                    <button id="clear-history" class="btn btn-small btn-secondary">清除历史</button>
+                </div>
+                
+                <div id="history-container" class="history-container">
+                    <div id="history-empty" class="empty-state">
+                        <span class="empty-icon">📋</span>
+                        <p>暂无传输历史</p>
+                    </div>
+                    <div id="history-list" class="history-list"></div>
+                </div>
+
+                <!-- 统计信息 -->
+                <div class="stats-container">
+                    <div class="stat-item">
+                        <span class="stat-value" id="total-transfers">0</span>
+                        <span class="stat-label">总传输</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="successful-transfers">0</span>
+                        <span class="stat-label">成功</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="failed-transfers">0</span>
+                        <span class="stat-label">失败</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="total-data">0 B</span>
+                        <span class="stat-label">总数据量</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 操作日志区域 -->
+            <section class="log-section">
+                <div class="section-header">
+                    <h2>操作日志</h2>
+                    <button id="clear-logs" class="btn btn-small btn-secondary">清除日志</button>
+                </div>
+                
+                <div id="log-container" class="log-container">
+                    <div id="log-entries" class="log-entries"></div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 消息提示 -->
+        <div id="message-container" class="message-container"></div>
+
+        <!-- 确认对话框 -->
+        <div id="confirm-dialog" class="dialog-overlay" style="display: none;">
+            <div class="dialog">
+                <div class="dialog-header">
+                    <h3 id="confirm-title">确认操作</h3>
+                </div>
+                <div class="dialog-body">
+                    <p id="confirm-message">确定要执行此操作吗？</p>
+                </div>
+                <div class="dialog-actions">
+                    <button id="confirm-cancel" class="btn btn-secondary">取消</button>
+                    <button id="confirm-ok" class="btn btn-primary">确定</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="ssh-sync.js"></script>
+</body>
+</html>
