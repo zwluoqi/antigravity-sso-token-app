@@ -448,35 +448,174 @@ async function injectTokenToDatabase(dbPath, tokenData) {
     }
 }
 
-// Protobuf字段操作辅助函数
-function removeProtobufField(data, fieldNumber) {
-    // 简化实现：返回原始数据（实际生产中需要完整实现protobuf解析）
-    return data;
-}
+// ====== Protobuf 操作函数 (参考 Antigravity-Manager/src-tauri/src/utils/protobuf.rs) ======
 
-function createOAuthField(accessToken, refreshToken, expiry) {
-    // 简化实现：创建包含OAuth信息的protobuf字段
-    // Field 6 = (6 << 3) | 2 = 50 (length-delimited)
-    const tokenBytes = Buffer.from(JSON.stringify({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expiry: expiry
-    }));
-    
-    const fieldHeader = Buffer.from([50]); // Field 6, wire type 2
-    const length = encodeVarint(tokenBytes.length);
-    
-    return Buffer.concat([fieldHeader, length, tokenBytes]);
-}
-
+/**
+ * Protobuf Varint 编码
+ */
 function encodeVarint(value) {
     const bytes = [];
-    while (value > 127) {
-        bytes.push((value & 0x7F) | 0x80);
-        value >>>= 7;
+    value = BigInt(value);
+    while (value >= 0x80n) {
+        bytes.push(Number((value & 0x7Fn) | 0x80n));
+        value >>= 7n;
     }
-    bytes.push(value & 0x7F);
+    bytes.push(Number(value));
     return Buffer.from(bytes);
+}
+
+/**
+ * 读取 Protobuf Varint
+ * @returns {Object} { value: BigInt, newOffset: number }
+ */
+function readVarint(data, offset) {
+    let result = 0n;
+    let shift = 0n;
+    let pos = offset;
+
+    while (true) {
+        if (pos >= data.length) {
+            throw new Error('数据不完整');
+        }
+        const byte = data[pos];
+        result |= BigInt(byte & 0x7F) << shift;
+        pos += 1;
+        if ((byte & 0x80) === 0) {
+            break;
+        }
+        shift += 7n;
+    }
+
+    return { value: result, newOffset: pos };
+}
+
+/**
+ * 跳过 Protobuf 字段
+ */
+function skipField(data, offset, wireType) {
+    switch (wireType) {
+        case 0: {
+            // Varint
+            const { newOffset } = readVarint(data, offset);
+            return newOffset;
+        }
+        case 1: {
+            // 64-bit
+            return offset + 8;
+        }
+        case 2: {
+            // Length-delimited
+            const { value: length, newOffset: contentOffset } = readVarint(data, offset);
+            return contentOffset + Number(length);
+        }
+        case 5: {
+            // 32-bit
+            return offset + 4;
+        }
+        default:
+            throw new Error(`未知 wire_type: ${wireType}`);
+    }
+}
+
+/**
+ * 移除指定的 Protobuf 字段
+ */
+function removeProtobufField(data, fieldNum) {
+    const result = [];
+    let offset = 0;
+
+    while (offset < data.length) {
+        const startOffset = offset;
+        const { value: tag, newOffset } = readVarint(data, offset);
+        const wireType = Number(tag & 7n);
+        const currentField = Number(tag >> 3n);
+
+        if (currentField === fieldNum) {
+            // 跳过此字段
+            offset = skipField(data, newOffset, wireType);
+            console.log(`[Antigravity Protobuf] 移除字段 ${fieldNum}`);
+        } else {
+            // 保留其他字段
+            const nextOffset = skipField(data, newOffset, wireType);
+            result.push(...data.slice(startOffset, nextOffset));
+            offset = nextOffset;
+        }
+    }
+
+    return Buffer.from(result);
+}
+
+/**
+ * 创建 OAuthTokenInfo (Field 6)
+ *
+ * 结构 (参考 protobuf.rs):
+ * message OAuthTokenInfo {
+ *     optional string access_token = 1;
+ *     optional string token_type = 2;
+ *     optional string refresh_token = 3;
+ *     optional Timestamp expiry = 4;
+ * }
+ */
+function createOAuthField(accessToken, refreshToken, expiry) {
+    console.log('[Antigravity Protobuf] 创建OAuth字段...');
+    console.log('[Antigravity Protobuf] access_token长度:', accessToken.length);
+    console.log('[Antigravity Protobuf] refresh_token长度:', refreshToken.length);
+    console.log('[Antigravity Protobuf] expiry:', expiry);
+    
+    // Field 1: access_token (string, wire_type = 2)
+    const tag1 = (1 << 3) | 2; // = 10
+    const field1 = Buffer.concat([
+        encodeVarint(tag1),
+        encodeVarint(accessToken.length),
+        Buffer.from(accessToken, 'utf8')
+    ]);
+
+    // Field 2: token_type (string, fixed value "Bearer", wire_type = 2)
+    const tag2 = (2 << 3) | 2; // = 18
+    const tokenType = "Bearer";
+    const field2 = Buffer.concat([
+        encodeVarint(tag2),
+        encodeVarint(tokenType.length),
+        Buffer.from(tokenType, 'utf8')
+    ]);
+
+    // Field 3: refresh_token (string, wire_type = 2)
+    const tag3 = (3 << 3) | 2; // = 26
+    const field3 = Buffer.concat([
+        encodeVarint(tag3),
+        encodeVarint(refreshToken.length),
+        Buffer.from(refreshToken, 'utf8')
+    ]);
+
+    // Field 4: expiry (嵌套的 Timestamp 消息, wire_type = 2)
+    // Timestamp 消息包含: Field 1: seconds (int64, wire_type = 0)
+    const timestampTag = (1 << 3) | 0; // = 8
+    const timestampMsg = Buffer.concat([
+        encodeVarint(timestampTag),
+        encodeVarint(Math.floor(expiry / 1000)) // 转换为秒
+    ]);
+    
+    const tag4 = (4 << 3) | 2; // = 34
+    const field4 = Buffer.concat([
+        encodeVarint(tag4),
+        encodeVarint(timestampMsg.length),
+        timestampMsg
+    ]);
+
+    // 合并所有字段为 OAuthTokenInfo 消息
+    const oauthInfo = Buffer.concat([field1, field2, field3, field4]);
+    console.log('[Antigravity Protobuf] OAuthTokenInfo消息长度:', oauthInfo.length);
+
+    // 包装为 Field 6 (length-delimited)
+    const tag6 = (6 << 3) | 2; // = 50
+    const field6 = Buffer.concat([
+        encodeVarint(tag6),
+        encodeVarint(oauthInfo.length),
+        oauthInfo
+    ]);
+    
+    console.log('[Antigravity Protobuf] Field 6 总长度:', field6.length);
+    return field6;
 }
 
 // 服务器通信相关IPC处理器
