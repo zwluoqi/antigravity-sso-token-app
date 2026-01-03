@@ -27,7 +27,16 @@ const ANTIGRAVITY_AUTH_TOKEN_FILE = path.join(ANTIGRAVITY_TOOLS_DIR, 'current_to
 const ANTIGRAVITY_ACCOUNTS_INDEX_FILE = path.join(ANTIGRAVITY_TOOLS_DIR, 'accounts.json');
 
 // Antigravity 数据库路径 (用于Token注入)
+// 参考 Antigravity-Manager/src-tauri/src/modules/db.rs
 function getAntigravityDbPath() {
+    // 首先尝试检测便携模式
+    const portableDbPath = getPortableDbPath();
+    if (portableDbPath) {
+        console.log('[Antigravity路径] 使用便携模式数据库路径:', portableDbPath);
+        return portableDbPath;
+    }
+    
+    // 标准模式：使用系统默认路径
     let dbPath = null;
     if (process.platform === 'win32') {
         const appData = process.env.APPDATA;
@@ -41,6 +50,53 @@ function getAntigravityDbPath() {
     }
     console.log('[Antigravity路径] 数据库路径:', dbPath);
     return dbPath;
+}
+
+// 检测便携模式数据库路径 (参考 Antigravity-Manager)
+function getPortableDbPath() {
+    try {
+        // 检查常见的便携模式安装位置
+        const possiblePaths = [];
+        
+        if (process.platform === 'win32') {
+            // Windows: 检查常见安装位置
+            const programFiles = process.env['ProgramFiles'];
+            const programFilesX86 = process.env['ProgramFiles(x86)'];
+            const localAppData = process.env.LOCALAPPDATA;
+            
+            if (programFiles) {
+                possiblePaths.push(path.join(programFiles, 'Antigravity'));
+            }
+            if (programFilesX86) {
+                possiblePaths.push(path.join(programFilesX86, 'Antigravity'));
+            }
+            if (localAppData) {
+                possiblePaths.push(path.join(localAppData, 'Programs', 'Antigravity'));
+            }
+            // 用户主目录下的常见位置
+            possiblePaths.push(path.join(os.homedir(), 'Antigravity'));
+            possiblePaths.push(path.join(os.homedir(), 'Desktop', 'Antigravity'));
+        } else if (process.platform === 'darwin') {
+            possiblePaths.push('/Applications/Antigravity.app/Contents/Resources');
+            possiblePaths.push(path.join(os.homedir(), 'Applications', 'Antigravity.app', 'Contents', 'Resources'));
+        } else {
+            possiblePaths.push('/opt/antigravity');
+            possiblePaths.push(path.join(os.homedir(), 'antigravity'));
+        }
+        
+        for (const basePath of possiblePaths) {
+            const portableDbPath = path.join(basePath, 'data', 'user-data', 'User', 'globalStorage', 'state.vscdb');
+            if (fs.existsSync(portableDbPath)) {
+                console.log('[Antigravity路径] 发现便携模式数据库:', portableDbPath);
+                return portableDbPath;
+            }
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('[Antigravity路径] 检测便携模式失败:', error);
+        return null;
+    }
 }
 
 // 应用配置文件路径
@@ -398,6 +454,34 @@ async function injectTokenToDatabase(dbPath, tokenData) {
     try {
         console.log('[Antigravity DB 注入] 开始Token注入流程...');
         console.log('[Antigravity DB 注入] 数据库路径:', dbPath);
+        console.log('[Antigravity DB 注入] 收到的Token数据键:', Object.keys(tokenData));
+        
+        // 解析Token数据 - 兼容多种属性名格式
+        const accessToken = tokenData.accessToken || tokenData.access_token || '';
+        const refreshToken = tokenData.refreshToken || tokenData.refresh_token || '';
+        
+        // 解析过期时间 - 支持多种格式
+        let expiryTimestamp;
+        if (tokenData.expiresAt) {
+            // ISO字符串格式 (来自renderer)
+            expiryTimestamp = new Date(tokenData.expiresAt).getTime();
+        } else {
+            // 默认365*24小时后过期
+            expiryTimestamp = Date.now() + 365*24*3600000;
+        }
+        
+        // 转换为Unix秒
+        const expirySeconds = Math.floor(expiryTimestamp / 1000);
+        
+        console.log('[Antigravity DB 注入] 解析后的Token数据:');
+        console.log('[Antigravity DB 注入] - accessToken长度:', accessToken.length);
+        console.log('[Antigravity DB 注入] - refreshToken长度:', refreshToken.length);
+        console.log('[Antigravity DB 注入] - expiryTimestamp:', expiryTimestamp);
+        console.log('[Antigravity DB 注入] - expirySeconds:', expirySeconds);
+        
+        if (!accessToken) {
+            throw new Error('accessToken为空，无法注入');
+        }
         
         const Database = require('better-sqlite3');
         const db = new Database(dbPath);
@@ -410,9 +494,9 @@ async function injectTokenToDatabase(dbPath, tokenData) {
         if (!row) {
             db.close();
             console.error('[Antigravity DB 注入] 数据库中未找到agentManagerInitState');
-            throw new Error('数据库中未找到agentManagerInitState');
+            throw new Error('数据库中未找到agentManagerInitState，请先启动一次Antigravity');
         }
-        console.log('[Antigravity DB 注入] 已读取到现有数据');
+        console.log('[Antigravity DB 注入] 已读取到现有数据, 原始长度:', row.value.length);
         
         // Base64解码
         const currentData = Buffer.from(row.value, 'base64');
@@ -422,13 +506,14 @@ async function injectTokenToDatabase(dbPath, tokenData) {
         const cleanData = removeProtobufField(currentData, 6);
         console.log('[Antigravity DB 注入] 已移除旧的Field 6, 清理后长度:', cleanData.length);
         
-        const newField = createOAuthField(tokenData.accessToken, tokenData.refreshToken || '', tokenData.expiryTimestamp || Date.now() + 3600000);
+        const newField = createOAuthField(accessToken, refreshToken, expirySeconds);
         console.log('[Antigravity DB 注入] 已创建新OAuth字段, 长度:', newField.length);
         
         // 合并数据
         const finalData = Buffer.concat([cleanData, newField]);
         const finalB64 = finalData.toString('base64');
         console.log('[Antigravity DB 注入] 数据已合并, 最终长度:', finalData.length);
+        console.log('[Antigravity DB 注入] Base64编码后长度:', finalB64.length);
         
         // 写入数据库
         console.log('[Antigravity DB 注入] 正在更新数据库...');
@@ -556,11 +641,27 @@ function removeProtobufField(data, fieldNum) {
  *     optional Timestamp expiry = 4;
  * }
  */
-function createOAuthField(accessToken, refreshToken, expiry) {
+/**
+ * 创建 OAuthTokenInfo (Field 6)
+ * 参考 Antigravity-Manager/src-tauri/src/utils/protobuf.rs
+ *
+ * 结构:
+ * message OAuthTokenInfo {
+ *     optional string access_token = 1;
+ *     optional string token_type = 2;
+ *     optional string refresh_token = 3;
+ *     optional Timestamp expiry = 4;
+ * }
+ *
+ * @param {string} accessToken - 访问令牌
+ * @param {string} refreshToken - 刷新令牌
+ * @param {number} expirySeconds - 过期时间（Unix秒，不是毫秒）
+ */
+function createOAuthField(accessToken, refreshToken, expirySeconds) {
     console.log('[Antigravity Protobuf] 创建OAuth字段...');
     console.log('[Antigravity Protobuf] access_token长度:', accessToken.length);
     console.log('[Antigravity Protobuf] refresh_token长度:', refreshToken.length);
-    console.log('[Antigravity Protobuf] expiry:', expiry);
+    console.log('[Antigravity Protobuf] expirySeconds:', expirySeconds);
     
     // Field 1: access_token (string, wire_type = 2)
     const tag1 = (1 << 3) | 2; // = 10
@@ -589,10 +690,11 @@ function createOAuthField(accessToken, refreshToken, expiry) {
 
     // Field 4: expiry (嵌套的 Timestamp 消息, wire_type = 2)
     // Timestamp 消息包含: Field 1: seconds (int64, wire_type = 0)
+    // 注意: expirySeconds 已经是秒，不需要再除以1000
     const timestampTag = (1 << 3) | 0; // = 8
     const timestampMsg = Buffer.concat([
         encodeVarint(timestampTag),
-        encodeVarint(Math.floor(expiry / 1000)) // 转换为秒
+        encodeVarint(expirySeconds)
     ]);
     
     const tag4 = (4 << 3) | 2; // = 34
