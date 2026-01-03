@@ -118,7 +118,7 @@ function createMainWindow() {
             spellcheck: false,
             enableWebSQL: false
         },
-        icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+        icon: path.join(__dirname, 'icon.png'),
         title: APP_NAME,
         show: false // 先不显示,等加载完成后再显示
     });
