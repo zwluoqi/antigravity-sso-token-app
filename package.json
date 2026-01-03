@@ -61,9 +61,9 @@
       "buildResources": "assets"
     },
     "forceCodeSigning": false,
-    "nodeGypRebuild": true,
-    "buildDependenciesFromSource": true,
-    "npmRebuild": true,
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
+    "npmRebuild": false,
     "files": [
       "src/**/*",
       "assets/**/*",
