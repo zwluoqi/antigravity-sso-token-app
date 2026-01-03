@@ -55,6 +55,7 @@
   "build": {
     "appId": "com.antigravity.antigravity-sso-token-manager",
     "productName": "Antigravity SSOToken Manager",
+    "icon": "src/icon.png",
     "directories": {
       "output": "dist",
       "buildResources": "assets"
@@ -87,6 +88,7 @@
       }
     ],
     "win": {
+      "icon": "src/icon.png",
       "target": [
         {
           "target": "nsis",
@@ -114,6 +116,7 @@
       "shortcutName": "Antigravity SSOToken Manager"
     },
     "mac": {
+      "icon": "src/icon.png",
       "target": [
         {
           "target": "dmg",
@@ -126,6 +129,7 @@
       "category": "public.app-category.developer-tools"
     },
     "linux": {
+      "icon": "src/icon.png",
       "target": [
         {
           "target": "AppImage",
