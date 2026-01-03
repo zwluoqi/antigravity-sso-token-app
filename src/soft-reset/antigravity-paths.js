@@ -158,7 +158,7 @@ async function getAntigravityDbPath() {
 }
 
 /**
- * Get Antigravity accounts directory path
+ * Get Antigravity sso token directory path
  * @returns {string} Path to ~/.antigravity_tools/accounts
  */
 function getAntigravityAccountsPath() {

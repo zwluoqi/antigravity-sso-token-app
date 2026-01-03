@@ -7,7 +7,7 @@ const { spawn, exec } = require('child_process');
 
 // 应用配置
 const isDev = process.argv.includes('--dev');
-const APP_NAME = 'Antigravity Account Manager';
+const APP_NAME = 'Antigravity SSOToken Manager';
 
 // SSH同步功能
 const SSHSyncIPC = require('./ssh-sync/ssh-sync-ipc');
@@ -16,7 +16,7 @@ const TokenFileMonitor = require('./token-file-monitor');
 
 // 全局变量
 let mainWindow;
-let serverUrl = 'http://127.0.0.1:16035'; // 默认服务器地址
+let serverUrl = 'https://supercode.xxworld.org'; // 默认服务器地址
 let sshSyncIPC; // SSH同步IPC处理器
 let tokenFileMonitor; // Token文件监控器
 
@@ -100,7 +100,7 @@ function getPortableDbPath() {
 }
 
 // 应用配置文件路径
-const APP_CONFIG_DIR = path.join(os.homedir(), '.antigravity-account-manager');
+const APP_CONFIG_DIR = path.join(os.homedir(), '.antigravity-sso-token-manager');
 const APP_CONFIG_FILE = path.join(APP_CONFIG_DIR, 'config.json');
 
 // 创建主窗口
@@ -216,7 +216,7 @@ function createMenu() {
                             type: 'info',
                             title: '关于',
                             message: APP_NAME,
-                            detail: `版本: ${packageJson.version}\n用于管理Antigravity Accounts的跨平台应用`
+                            detail: `版本: ${packageJson.version}\n用于管理Antigravity SSOToken的跨平台应用`
                         });
                     }
                 }

@@ -1,7 +1,7 @@
 {
   "name": "antigravity-sso-token-app",
   "version": "1.6.0",
-  "description": "Antigravity Account Manager - 跨平台native应用用于管理Antigravity Accounts",
+  "description": "Antigravity SSOToken Manager - 跨平台native应用用于管理Antigravity SSOToken",
   "homepage": "https://github.com/antigravity-team/antigravity-sso-token-app",
   "main": "src/main.js",
   "scripts": {
@@ -53,8 +53,8 @@
     "node-ssh": "^13.2.1"
   },
   "build": {
-    "appId": "com.antigravity.antigravity-account-manager",
-    "productName": "Antigravity Account Manager",
+    "appId": "com.antigravity.antigravity-sso-token-manager",
+    "productName": "Antigravity SSOToken Manager",
     "directories": {
       "output": "dist",
       "buildResources": "assets"
@@ -111,7 +111,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Antigravity Account Manager"
+      "shortcutName": "Antigravity SSOToken Manager"
     },
     "mac": {
       "target": [

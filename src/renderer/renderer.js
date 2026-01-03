@@ -136,7 +136,7 @@ class AppState {
     constructor() {
         this.currentToken = null;
         this.serverConfig = {
-            url: 'http://127.0.0.1:16035',
+            url: 'https://supercode.xxworld.org',
             autoRefresh: true,
             refreshInterval: 30,
             ssoToken: ''

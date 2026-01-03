@@ -12,7 +12,7 @@ class ConfigStore {
         this.cryptoService = cryptoService || new CryptoService();
 
         // 配置文件路径
-        this.appConfigDir = path.join(os.homedir(), '.antigravity-account-manager');
+        this.appConfigDir = path.join(os.homedir(), '.antigravity-sso-token-manager');
         this.configPath = path.join(this.appConfigDir, 'ssh-config.json');
 
         // 主密钥（懒加载）
