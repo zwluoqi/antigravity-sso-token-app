@@ -251,7 +251,7 @@ class AppState {
             tokenStatus.textContent = isExpired ? '已过期' : '有效';
             tokenStatus.className = `status-badge ${isExpired ? 'status-expired' : 'status-active'}`;
 
-            currentTokenId.textContent = this.currentToken.aws_sso_app_session_id.substring(0,10) || 'N/A';
+            currentTokenId.textContent = this.currentToken.aws_sso_app_session_id.substring(0, 10) || 'N/A';
             tokenExpiry.textContent = utils.formatDate(expiry);
             lastUpdate.textContent = utils.formatDate(now);
         } else {
@@ -1783,11 +1783,14 @@ class App {
     async getRenewalConfig() {
         try {
             const response = await fetch(`${this.appState.serverConfig.url}/api/renewal-config`, {
-                method: 'GET',
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.appState.serverConfig.ssoToken}`
-                }
+                    'Authorization': `Bearer ${this.appState.serverConfig.ssoToken}`,
+                },
+                body: JSON.stringify({
+                    appName: 'antigravity',
+                })
             });
 
             if (!response.ok) {
