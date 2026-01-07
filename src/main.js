@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const os = require('os');
 const { spawn, exec } = require('child_process');
+const jwt = require('jsonwebtoken');
 
 // 应用配置
 const isDev = process.argv.includes('--dev');
@@ -1186,6 +1187,16 @@ ipcMain.handle('open-path', async (event, filePath) => {
 ipcMain.handle('update-menu-indicator', (event, hasUpdate) => {
     updateMenuUpdateIndicator(hasUpdate);
     return { success: true };
+});
+
+ipcMain.handle('jwtdecode', (event, token) => {
+    try {
+        const decoded = jwt.decode(token);
+        return { success: true, data: decoded };
+    } catch (error) {
+        console.error('JWT解码失败:', error);
+        return { success: false, error: error.message };
+    }
 });
 
 // Token文件监控相关的IPC处理器

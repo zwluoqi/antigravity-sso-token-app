@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 菜单更新
     updateMenuIndicator: (hasUpdate) => ipcRenderer.invoke('update-menu-indicator', hasUpdate),
 
+    jwtdecode: (token) => ipcRenderer.invoke('jwtdecode', token),
+
     // Token文件监控
     tokenMonitor: {
         getStatus: () => ipcRenderer.invoke('get-token-monitor-status'),

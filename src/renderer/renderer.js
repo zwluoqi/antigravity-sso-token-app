@@ -251,6 +251,18 @@ class AppState {
             tokenStatus.textContent = isExpired ? '已过期' : '有效';
             tokenStatus.className = `status-badge ${isExpired ? 'status-expired' : 'status-active'}`;
 
+            const jwtDecode = electronAPI.jwtdecode(this.currentToken.aws_sso_app_session_id).then((res) => {
+                console.log('jwtDecode', res.data)
+                // 获取邮箱@前缀
+                // 然后的前四位和后四位
+                // 用...连接
+                if (res?.data?.email) {
+                    const email = res.data.email.split('@')[0];
+                    const prefix = email.substring(0, 4);
+                    const suffix = email.substring(email.length - 4);
+                    currentTokenId.textContent = `${prefix}...${suffix}`;
+                }
+            });
             currentTokenId.textContent = this.currentToken.aws_sso_app_session_id.substring(0, 10) || 'N/A';
             tokenExpiry.textContent = utils.formatDate(expiry);
             lastUpdate.textContent = utils.formatDate(now);
