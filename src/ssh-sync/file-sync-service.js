@@ -26,7 +26,7 @@ class FileSyncService {
         };
 
         // 默认的current_token.json路径 (Antigravity)
-        this.defaultLocalTokenPath = path.join(os.homedir(), '.antigravity_tools', 'current_token.json');
+        this.defaultLocalTokenPath = path.join(os.homedir(), '.antigravity-sso-token-manager', 'current_token.json');
     }
 
     /**
@@ -90,7 +90,7 @@ class FileSyncService {
                     expandedRemotePath = remotePath.replace('~', homeDir);
                 }
             }
-            
+
             // 确保使用Unix路径分隔符
             expandedRemotePath = expandedRemotePath.replace(/\\/g, '/');
             console.log(`文件传输路径: ${remotePath} -> ${expandedRemotePath}`);
@@ -256,7 +256,7 @@ class FileSyncService {
         try {
             // 处理路径，确保使用正确的格式
             let processedPath = remotePath;
-            
+
             // 如果路径包含~，展开它
             if (processedPath.startsWith('~')) {
                 const homeResult = await this.sshManager.executeCommand('echo $HOME');
@@ -265,7 +265,7 @@ class FileSyncService {
                     processedPath = processedPath.replace('~', homeDir);
                 }
             }
-            
+
             // 确保使用Unix路径分隔符
             processedPath = processedPath.replace(/\\/g, '/');
 
@@ -399,7 +399,7 @@ class FileSyncService {
                 if (connectionStatus.config && connectionStatus.config.remotePath) {
                     targetRemotePath = path.join(connectionStatus.config.remotePath, 'current_token.json');
                 } else {
-                    targetRemotePath = '~/.antigravity_tools/current_token.json';
+                    targetRemotePath = '~/.antigravity-sso-token-manager/current_token.json';
                 }
             }
 

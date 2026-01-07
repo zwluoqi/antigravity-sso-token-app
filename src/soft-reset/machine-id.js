@@ -112,7 +112,7 @@ async function readKiroMachineId() {
 async function writeCustomMachineId(uuid, hashedId) {
     const antigravityToolsPath = getAntigravityToolsPath();
 
-    // Ensure the .antigravity_tools directory exists
+    // Ensure the .antigravity-sso-token-manager directory exists
     await fs.ensureDir(antigravityToolsPath);
 
     // Write both files

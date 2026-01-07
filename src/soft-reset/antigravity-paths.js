@@ -16,12 +16,12 @@ const ANTIGRAVITY_APP_NAMES = {
 };
 
 /**
- * Get Antigravity tools directory path (~/.antigravity_tools)
+ * Get Antigravity tools directory path (~/.antigravity-sso-token-manager)
  * This is where user-specific Antigravity data is stored
- * @returns {string} Path to ~/.antigravity_tools directory
+ * @returns {string} Path to ~/.antigravity-sso-token-manager directory
  */
 function getAntigravityToolsPath() {
-    return path.join(os.homedir(), '.antigravity_tools');
+    return path.join(os.homedir(), '.antigravity-sso-token-manager');
 }
 
 /**
@@ -74,6 +74,10 @@ async function getAntigravityInstallPath() {
             possiblePaths.push(
                 'C:\\Program Files\\Antigravity',
                 'C:\\Program Files (x86)\\Antigravity',
+                'D:\\Program Files\\Antigravity',
+                'D:\\Program Files (x86)\\Antigravity',
+                'E:\\Program Files\\Antigravity',
+                'E:\\Program Files (x86)\\Antigravity',
                 path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Antigravity')
             );
             break;
@@ -159,26 +163,26 @@ async function getAntigravityDbPath() {
 
 /**
  * Get Antigravity sso token directory path
- * @returns {string} Path to ~/.antigravity_tools/accounts
+ * @returns {string} Path to ~/.antigravity-sso-token-manager/accounts
  */
 function getAntigravityAccountsPath() {
-    return path.join(os.homedir(), '.antigravity_tools', 'accounts');
+    return path.join(os.homedir(), '.antigravity-sso-token-manager', 'accounts');
 }
 
 /**
  * Get current token file path
- * @returns {string} Path to ~/.antigravity_tools/current_token.json
+ * @returns {string} Path to ~/.antigravity-sso-token-manager/current_token.json
  */
 function getAntigravityTokenPath() {
-    return path.join(os.homedir(), '.antigravity_tools', 'current_token.json');
+    return path.join(os.homedir(), '.antigravity-sso-token-manager', 'current_token.json');
 }
 
 /**
  * Get accounts index file path
- * @returns {string} Path to ~/.antigravity_tools/accounts.json
+ * @returns {string} Path to ~/.antigravity-sso-token-manager/accounts.json
  */
 function getAntigravityAccountsIndexPath() {
-    return path.join(os.homedir(), '.antigravity_tools', 'accounts.json');
+    return path.join(os.homedir(), '.antigravity-sso-token-manager', 'accounts.json');
 }
 
 /**

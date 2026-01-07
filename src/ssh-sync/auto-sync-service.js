@@ -17,11 +17,11 @@ class AutoSyncService {
         this.syncCooldown = 5000; // 5秒冷却时间，避免频繁同步
         this.retryAttempts = 3;
         this.retryDelay = 10000; // 10秒重试延迟
-        
+
         // 默认监控的文件路径 (Antigravity)
-        this.defaultTokenPath = path.join(os.homedir(), '.antigravity_tools', 'current_token.json');
+        this.defaultTokenPath = path.join(os.homedir(), '.antigravity-sso-token-manager', 'current_token.json');
         this.watchedPath = this.defaultTokenPath;
-        
+
         // 事件回调
         this.onSyncSuccess = null;
         this.onSyncError = null;
@@ -51,7 +51,7 @@ class AutoSyncService {
 
             this.isEnabled = true;
             await this.startWatching();
-            
+
             console.log('自动同步服务已启用');
             return { success: true };
         } catch (error) {
@@ -68,7 +68,7 @@ class AutoSyncService {
         try {
             this.isEnabled = false;
             await this.stopWatching();
-            
+
             console.log('自动同步服务已禁用');
             return { success: true };
         } catch (error) {
@@ -148,7 +148,7 @@ class AutoSyncService {
         }
 
         const now = Date.now();
-        
+
         // 检查冷却时间
         if (now - this.lastSyncTime < this.syncCooldown) {
             console.log('文件变化检测到，但在冷却时间内，跳过同步');
@@ -156,7 +156,7 @@ class AutoSyncService {
         }
 
         console.log(`检测到文件变化: ${filePath}`);
-        
+
         // 触发文件变化回调
         if (this.onFileChange) {
             this.onFileChange(filePath);
@@ -171,15 +171,15 @@ class AutoSyncService {
      */
     async performAutoSync() {
         let attempts = 0;
-        
+
         while (attempts < this.retryAttempts) {
             try {
                 console.log(`开始自动同步 (尝试 ${attempts + 1}/${this.retryAttempts})`);
-                
+
                 // 检查SSH连接状态
                 const sshManager = this.fileSyncService.sshManager;
                 const connectionStatus = sshManager.getConnectionStatus();
-                
+
                 if (!connectionStatus.connected) {
                     // 尝试重新连接
                     const configResult = await this.configStore.loadConfig();
@@ -195,34 +195,34 @@ class AutoSyncService {
 
                 // 执行同步
                 const syncResult = await this.fileSyncService.syncAntigravityToken();
-                
+
                 if (syncResult.success) {
                     this.lastSyncTime = Date.now();
                     console.log('自动同步成功');
-                    
+
                     if (this.onSyncSuccess) {
                         this.onSyncSuccess(syncResult);
                     }
-                    
+
                     return;
                 } else {
                     throw new Error(syncResult.error);
                 }
-                
+
             } catch (error) {
                 attempts++;
                 console.error(`自动同步失败 (尝试 ${attempts}/${this.retryAttempts}):`, error.message);
-                
+
                 if (attempts >= this.retryAttempts) {
                     console.error('自动同步达到最大重试次数，放弃同步');
-                    
+
                     if (this.onSyncError) {
                         this.onSyncError(error);
                     }
-                    
+
                     return;
                 }
-                
+
                 // 等待重试延迟
                 await this.sleep(this.retryDelay);
             }

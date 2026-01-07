@@ -209,16 +209,16 @@ class SSHSyncManager {
         // 完全移除输入框的事件拦截，允许所有原生行为
         [this.hostInput, this.usernameInput, this.passwordInput, this.remotePathInput].forEach(input => {
             if (!input) return;
-            
+
             // 移除任何可能的只读属性
             input.removeAttribute('readonly');
             input.removeAttribute('disabled');
-            
+
             // 确保输入框可以接收焦点和输入
             input.style.userSelect = 'text';
             input.style.webkitUserSelect = 'text';
             input.style.pointerEvents = 'auto';
-            
+
             console.log(`[SSH-Sync] 输入框已启用: ${input.id}`);
         });
 
@@ -411,7 +411,7 @@ class SSHSyncManager {
             remotePath: this.remotePathInput.value.trim() || '~/.aws/sso/cache',
             autoSync: this.autoSyncCheckbox.checked
         };
-        
+
         console.log('[SSH-Sync] 获取表单数据:', {
             host: formData.host,
             port: formData.port,
@@ -420,7 +420,7 @@ class SSHSyncManager {
             remotePath: formData.remotePath,
             autoSync: formData.autoSync
         });
-        
+
         return formData;
     }
 
@@ -658,11 +658,11 @@ class SSHSyncManager {
         // 如果没有连接，先尝试建立连接
         if (!this.isConnected) {
             this.addLog('info', 'SSH未连接，尝试使用保存的配置建立连接...');
-            
+
             // 先尝试加载保存的配置
             let config = this.currentConfig;
             console.log('[SSH-Sync] 当前配置:', config);
-            
+
             // 如果没有保存的配置，使用表单数据
             if (!config || !config.host) {
                 console.log('[SSH-Sync] 没有保存的配置，尝试使用表单数据');
@@ -677,12 +677,12 @@ class SSHSyncManager {
                 console.log('[SSH-Sync] 使用保存的配置');
                 this.addLog('info', `使用保存的配置连接到 ${config.host}:${config.port}`);
             }
-            
+
             try {
                 this.updateConnectionStatus('connecting');
-                
+
                 const connectionResult = await electronAPI.sshSync.testConnection(config);
-                
+
                 if (connectionResult.success) {
                     this.updateConnectionStatus(true);
                     this.addLog('success', 'SSH连接建立成功');
@@ -888,7 +888,7 @@ class SSHSyncManager {
         item.innerHTML = `
             <div class="history-status ${transfer.status}">${statusText}</div>
             <div class="history-details">
-                <div class="history-path">${transfer.remotePath || '~/.antigravity_tools/current_token.json'}</div>
+                <div class="history-path">${transfer.remotePath || '~/.antigravity-sso-token-manager/current_token.json'}</div>
                 <div class="history-time">${localUtils.formatDate(transfer.startTime)}</div>
             </div>
             <div class="history-size">${transfer.progress ? localUtils.formatFileSize(transfer.progress.totalBytes) : '-'}</div>

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="ssh-sync.css">
 </head>
+
 <body>
     <div class="container">
         <header class="header">
@@ -27,7 +29,8 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="ssh-port">端口</label>
-                            <input type="number" id="ssh-port" name="port" placeholder="22" min="1" max="65535" value="22">
+                            <input type="number" id="ssh-port" name="port" placeholder="22" min="1" max="65535"
+                                value="22">
                         </div>
                         <div class="form-group">
                             <label for="ssh-username">用户名 *</label>
@@ -43,7 +46,8 @@
 
                     <div class="form-group">
                         <label for="ssh-remote-path">远程目录路径</label>
-                        <input type="text" id="ssh-remote-path" name="remotePath" placeholder="~/.antigravity_tools" value="~/.antigravity_tools">
+                        <input type="text" id="ssh-remote-path" name="remotePath"
+                            placeholder="~/.antigravity-sso-token-manager" value="~/.antigravity-sso-token-manager">
                         <small class="form-hint">current_token.json将被上传到此目录</small>
                     </div>
 
@@ -80,7 +84,7 @@
             <!-- 文件同步区域 -->
             <section class="sync-section">
                 <h2>文件同步</h2>
-                
+
                 <!-- 同步控制 -->
                 <div class="sync-controls">
                     <button id="manual-sync" class="btn btn-primary btn-large">
@@ -142,7 +146,7 @@
                     <h2>传输历史</h2>
                     <button id="clear-history" class="btn btn-small btn-secondary">清除历史</button>
                 </div>
-                
+
                 <div id="history-container" class="history-container">
                     <div id="history-empty" class="empty-state">
                         <span class="empty-icon">📋</span>
@@ -178,7 +182,7 @@
                     <h2>操作日志</h2>
                     <button id="clear-logs" class="btn btn-small btn-secondary">清除日志</button>
                 </div>
-                
+
                 <div id="log-container" class="log-container">
                     <div id="log-entries" class="log-entries"></div>
                 </div>
@@ -207,4 +211,5 @@
 
     <script src="ssh-sync.js"></script>
 </body>
+
 </html>

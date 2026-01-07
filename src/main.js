@@ -21,10 +21,10 @@ let sshSyncIPC; // SSH同步IPC处理器
 let tokenFileMonitor; // Token文件监控器
 
 // Antigravity 数据目录路径 (参考 Antigravity-Manager)
-const ANTIGRAVITY_TOOLS_DIR = path.join(os.homedir(), '.antigravity_tools');
-const ANTIGRAVITY_ACCOUNTS_DIR = path.join(ANTIGRAVITY_TOOLS_DIR, 'accounts');
-const ANTIGRAVITY_AUTH_TOKEN_FILE = path.join(ANTIGRAVITY_TOOLS_DIR, 'current_token.json');
-const ANTIGRAVITY_ACCOUNTS_INDEX_FILE = path.join(ANTIGRAVITY_TOOLS_DIR, 'accounts.json');
+const ANTIGRAVITY_SSO_TOKEN_DIR = path.join(os.homedir(), '.antigravity-sso-token-manager');
+const ANTIGRAVITY_ACCOUNTS_DIR = path.join(ANTIGRAVITY_SSO_TOKEN_DIR, 'accounts');
+const ANTIGRAVITY_AUTH_TOKEN_FILE = path.join(ANTIGRAVITY_SSO_TOKEN_DIR, 'current_token.json');
+const ANTIGRAVITY_ACCOUNTS_INDEX_FILE = path.join(ANTIGRAVITY_SSO_TOKEN_DIR, 'accounts.json');
 
 // Antigravity 数据库路径 (用于Token注入)
 // 参考 Antigravity-Manager/src-tauri/src/modules/db.rs
@@ -35,7 +35,7 @@ function getAntigravityDbPath() {
         console.log('[Antigravity路径] 使用便携模式数据库路径:', portableDbPath);
         return portableDbPath;
     }
-    
+
     // 标准模式：使用系统默认路径
     let dbPath = null;
     if (process.platform === 'win32') {
@@ -57,13 +57,13 @@ function getPortableDbPath() {
     try {
         // 检查常见的便携模式安装位置
         const possiblePaths = [];
-        
+
         if (process.platform === 'win32') {
             // Windows: 检查常见安装位置
             const programFiles = process.env['ProgramFiles'];
             const programFilesX86 = process.env['ProgramFiles(x86)'];
             const localAppData = process.env.LOCALAPPDATA;
-            
+
             if (programFiles) {
                 possiblePaths.push(path.join(programFiles, 'Antigravity'));
             }
@@ -83,7 +83,7 @@ function getPortableDbPath() {
             possiblePaths.push('/opt/antigravity');
             possiblePaths.push(path.join(os.homedir(), 'antigravity'));
         }
-        
+
         for (const basePath of possiblePaths) {
             const portableDbPath = path.join(basePath, 'data', 'user-data', 'User', 'globalStorage', 'state.vscdb');
             if (fs.existsSync(portableDbPath)) {
@@ -91,7 +91,7 @@ function getPortableDbPath() {
                 return portableDbPath;
             }
         }
-        
+
         return null;
     } catch (error) {
         console.error('[Antigravity路径] 检测便携模式失败:', error);
@@ -183,7 +183,7 @@ function createMenu() {
                 {
                     label: '打开Antigravity数据目录',
                     click: () => {
-                        require('electron').shell.openPath(ANTIGRAVITY_TOOLS_DIR);
+                        require('electron').shell.openPath(ANTIGRAVITY_SSO_TOKEN_DIR);
                     }
                 },
                 {
@@ -338,10 +338,10 @@ app.whenReady().then(async () => {
 
     // 确保Antigravity数据目录存在
     console.log('[Antigravity路径] 初始化数据目录...');
-    console.log('[Antigravity路径] 工具目录:', ANTIGRAVITY_TOOLS_DIR);
+    console.log('[Antigravity路径] 工具目录:', ANTIGRAVITY_SSO_TOKEN_DIR);
     console.log('[Antigravity路径] 账户目录:', ANTIGRAVITY_ACCOUNTS_DIR);
     console.log('[Antigravity路径] Token文件:', ANTIGRAVITY_AUTH_TOKEN_FILE);
-    await fs.ensureDir(ANTIGRAVITY_TOOLS_DIR);
+    await fs.ensureDir(ANTIGRAVITY_SSO_TOKEN_DIR);
     await fs.ensureDir(ANTIGRAVITY_ACCOUNTS_DIR);
     console.log('[Antigravity路径] 数据目录初始化完成');
 
@@ -386,10 +386,10 @@ ipcMain.handle('get-antigravity-token', async () => {
     try {
         console.log('[Antigravity Token] 正在读取Token...');
         console.log('[Antigravity Token] Token文件路径:', ANTIGRAVITY_AUTH_TOKEN_FILE);
-        
+
         // 确保目录存在
-        await fs.ensureDir(ANTIGRAVITY_TOOLS_DIR);
-        
+        await fs.ensureDir(ANTIGRAVITY_SSO_TOKEN_DIR);
+
         if (await fs.pathExists(ANTIGRAVITY_AUTH_TOKEN_FILE)) {
             const tokenData = await fs.readJson(ANTIGRAVITY_AUTH_TOKEN_FILE);
             console.log('[Antigravity Token] Token读取成功');
@@ -408,9 +408,9 @@ ipcMain.handle('save-antigravity-token', async (event, tokenData) => {
     try {
         console.log('[Antigravity Token] 正在保存Token...');
         console.log('[Antigravity Token] Token文件路径:', ANTIGRAVITY_AUTH_TOKEN_FILE);
-        
+
         // 确保目录存在
-        await fs.ensureDir(ANTIGRAVITY_TOOLS_DIR);
+        await fs.ensureDir(ANTIGRAVITY_SSO_TOKEN_DIR);
         await fs.ensureDir(ANTIGRAVITY_ACCOUNTS_DIR);
         console.log('[Antigravity Token] 目录已确认存在');
 
@@ -455,11 +455,11 @@ async function injectTokenToDatabase(dbPath, tokenData) {
         console.log('[Antigravity DB 注入] 开始Token注入流程...');
         console.log('[Antigravity DB 注入] 数据库路径:', dbPath);
         console.log('[Antigravity DB 注入] 收到的Token数据键:', Object.keys(tokenData));
-        
+
         // 解析Token数据 - 兼容多种属性名格式
         const accessToken = tokenData.accessToken || tokenData.access_token || '';
         const refreshToken = tokenData.refreshToken || tokenData.refresh_token || '';
-        
+
         // 解析过期时间 - 支持多种格式
         let expiryTimestamp;
         if (tokenData.expiresAt) {
@@ -467,63 +467,63 @@ async function injectTokenToDatabase(dbPath, tokenData) {
             expiryTimestamp = new Date(tokenData.expiresAt).getTime();
         } else {
             // 默认365*24小时后过期
-            expiryTimestamp = Date.now() + 365*24*3600000;
+            expiryTimestamp = Date.now() + 365 * 24 * 3600000;
         }
-        
+
         // 转换为Unix秒
         const expirySeconds = Math.floor(expiryTimestamp / 1000);
-        
+
         console.log('[Antigravity DB 注入] 解析后的Token数据:');
         console.log('[Antigravity DB 注入] - accessToken长度:', accessToken.length);
         console.log('[Antigravity DB 注入] - refreshToken长度:', refreshToken.length);
         console.log('[Antigravity DB 注入] - expiryTimestamp:', expiryTimestamp);
         console.log('[Antigravity DB 注入] - expirySeconds:', expirySeconds);
-        
+
         if (!accessToken) {
             throw new Error('accessToken为空，无法注入');
         }
-        
+
         const Database = require('better-sqlite3');
         const db = new Database(dbPath);
         console.log('[Antigravity DB 注入] 数据库已打开');
-        
+
         // 读取当前数据
         console.log('[Antigravity DB 注入] 正在读取 jetskiStateSync.agentManagerInitState...');
         const row = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get('jetskiStateSync.agentManagerInitState');
-        
+
         if (!row) {
             db.close();
             console.error('[Antigravity DB 注入] 数据库中未找到agentManagerInitState');
             throw new Error('数据库中未找到agentManagerInitState，请先启动一次Antigravity');
         }
         console.log('[Antigravity DB 注入] 已读取到现有数据, 原始长度:', row.value.length);
-        
+
         // Base64解码
         const currentData = Buffer.from(row.value, 'base64');
         console.log('[Antigravity DB 注入] 数据已Base64解码, 长度:', currentData.length);
-        
+
         // 移除旧的Field 6并创建新的OAuth字段
         const cleanData = removeProtobufField(currentData, 6);
         console.log('[Antigravity DB 注入] 已移除旧的Field 6, 清理后长度:', cleanData.length);
-        
+
         const newField = createOAuthField(accessToken, refreshToken, expirySeconds);
         console.log('[Antigravity DB 注入] 已创建新OAuth字段, 长度:', newField.length);
-        
+
         // 合并数据
         const finalData = Buffer.concat([cleanData, newField]);
         const finalB64 = finalData.toString('base64');
         console.log('[Antigravity DB 注入] 数据已合并, 最终长度:', finalData.length);
         console.log('[Antigravity DB 注入] Base64编码后长度:', finalB64.length);
-        
+
         // 写入数据库
         console.log('[Antigravity DB 注入] 正在更新数据库...');
         db.prepare("UPDATE ItemTable SET value = ? WHERE key = ?").run(finalB64, 'jetskiStateSync.agentManagerInitState');
         console.log('[Antigravity DB 注入] agentManagerInitState 已更新');
-        
+
         // 注入Onboarding标记
         db.prepare("INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)").run('antigravityOnboarding', 'true');
         console.log('[Antigravity DB 注入] antigravityOnboarding 标记已设置');
-        
+
         db.close();
         console.log('[Antigravity DB 注入] 数据库已关闭, Token注入完成');
         return true;
@@ -662,7 +662,7 @@ function createOAuthField(accessToken, refreshToken, expirySeconds) {
     console.log('[Antigravity Protobuf] access_token长度:', accessToken.length);
     console.log('[Antigravity Protobuf] refresh_token长度:', refreshToken.length);
     console.log('[Antigravity Protobuf] expirySeconds:', expirySeconds);
-    
+
     // Field 1: access_token (string, wire_type = 2)
     const tag1 = (1 << 3) | 2; // = 10
     const field1 = Buffer.concat([
@@ -696,7 +696,7 @@ function createOAuthField(accessToken, refreshToken, expirySeconds) {
         encodeVarint(timestampTag),
         encodeVarint(expirySeconds)
     ]);
-    
+
     const tag4 = (4 << 3) | 2; // = 34
     const field4 = Buffer.concat([
         encodeVarint(tag4),
@@ -715,7 +715,7 @@ function createOAuthField(accessToken, refreshToken, expirySeconds) {
         encodeVarint(oauthInfo.length),
         oauthInfo
     ]);
-    
+
     console.log('[Antigravity Protobuf] Field 6 总长度:', field6.length);
     return field6;
 }
@@ -724,11 +724,11 @@ function createOAuthField(accessToken, refreshToken, expirySeconds) {
 ipcMain.handle('request-token-from-server', async (event, currentTokenId, ssoToken) => {
     try {
         console.log('[Antigravity 申请新账号] 开始申请新账号...');
-        console.log('[Antigravity 申请新账号] Antigravity数据目录:', ANTIGRAVITY_TOOLS_DIR);
+        console.log('[Antigravity 申请新账号] Antigravity数据目录:', ANTIGRAVITY_SSO_TOKEN_DIR);
         console.log('[Antigravity 申请新账号] Token文件路径:', ANTIGRAVITY_AUTH_TOKEN_FILE);
         console.log('[Antigravity 申请新账号] 数据库路径:', getAntigravityDbPath());
         console.log('[Antigravity 申请新账号] 服务器地址:', serverUrl);
-        
+
         const fetch = require('node-fetch');
         const packageJson = require('../package.json');
 
@@ -784,12 +784,12 @@ ipcMain.handle('request-token-from-server', async (event, currentTokenId, ssoTok
 ipcMain.handle('refresh-token-from-server', async (event, tokenId, ssoToken) => {
     try {
         console.log('[Antigravity 刷新Token] 开始刷新Token...');
-        console.log('[Antigravity 刷新Token] Antigravity数据目录:', ANTIGRAVITY_TOOLS_DIR);
+        console.log('[Antigravity 刷新Token] Antigravity数据目录:', ANTIGRAVITY_SSO_TOKEN_DIR);
         console.log('[Antigravity 刷新Token] Token文件路径:', ANTIGRAVITY_AUTH_TOKEN_FILE);
         console.log('[Antigravity 刷新Token] 数据库路径:', getAntigravityDbPath());
         console.log('[Antigravity 刷新Token] 服务器地址:', serverUrl);
         console.log('[Antigravity 刷新Token] TokenId:', tokenId);
-        
+
         const fetch = require('node-fetch');
         const packageJson = require('../package.json');
 
@@ -919,7 +919,7 @@ ipcMain.handle('show-error-box', async (event, title, content) => {
 
 // 路径相关IPC处理器
 ipcMain.handle('get-antigravity-data-path', () => {
-    return ANTIGRAVITY_TOOLS_DIR;
+    return ANTIGRAVITY_SSO_TOKEN_DIR;
 });
 
 ipcMain.handle('get-antigravity-auth-token-path', () => {

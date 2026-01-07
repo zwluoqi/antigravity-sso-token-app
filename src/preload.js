@@ -274,7 +274,7 @@ contextBridge.exposeInMainWorld('utils', {
             port: 22,
             username: '',
             password: '',
-            remotePath: '~/.antigravity_tools',
+            remotePath: '~/.antigravity-sso-token-manager',
             autoSync: false
         };
     }

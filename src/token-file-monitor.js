@@ -13,15 +13,15 @@ class TokenFileMonitor {
         this.isWatching = false;
         this.syncCooldown = 2000; // 2秒冷却时间，避免频繁同步
         this.lastSyncTime = 0;
-        
+
         // Antigravity Token文件路径
-        this.tokenFilePath = path.join(os.homedir(), '.antigravity_tools', 'current_token.json');
-        
+        this.tokenFilePath = path.join(os.homedir(), '.antigravity-sso-token-manager', 'current_token.json');
+
         // 事件回调
         this.onTokenFileDeleted = null;
         this.onSyncTriggered = null;
         this.onError = null;
-        
+
         console.log(`Token文件监控器初始化，监控路径: ${this.tokenFilePath}`);
     }
 
@@ -70,7 +70,7 @@ class TokenFileMonitor {
 
             this.isWatching = true;
             console.log(`开始监控Token文件删除事件: ${this.tokenFilePath}`);
-            
+
             return { success: true };
         } catch (error) {
             console.error('启动Token文件监控失败:', error);
@@ -106,7 +106,7 @@ class TokenFileMonitor {
      */
     async handleTokenFileDeleted(filePath) {
         const now = Date.now();
-        
+
         // 检查冷却时间
         if (now - this.lastSyncTime < this.syncCooldown) {
             console.log('Token文件删除检测到，但在冷却时间内，跳过同步');
@@ -114,7 +114,7 @@ class TokenFileMonitor {
         }
 
         console.log(`检测到Token文件被删除: ${filePath}`);
-        
+
         // 触发文件删除回调
         if (this.onTokenFileDeleted) {
             this.onTokenFileDeleted(filePath);
@@ -122,13 +122,13 @@ class TokenFileMonitor {
 
         // 等待一小段时间确保文件确实被删除
         await this.sleep(500);
-        
+
         // 再次确认文件不存在
         const fileExists = await fs.pathExists(this.tokenFilePath);
         if (!fileExists) {
             console.log('确认Token文件已被删除，触发服务器同步机制');
             this.lastSyncTime = now;
-            
+
             // 触发同步回调
             if (this.onSyncTriggered) {
                 await this.onSyncTriggered(filePath);
