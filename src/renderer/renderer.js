@@ -136,7 +136,7 @@ class AppState {
     constructor() {
         this.currentToken = null;
         this.serverConfig = {
-            url: 'https://supercode.xxworld.org',
+            url: 'https://supercode.pockgo.com',
             autoRefresh: true,
             refreshInterval: 30,
             ssoToken: ''

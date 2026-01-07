@@ -19,7 +19,7 @@ const { fetchQuota, formatTimeRemaining } = require('./quota');
 
 // 全局变量
 let mainWindow;
-let serverUrl = 'https://supercode.xxworld.org'; // 默认服务器地址
+let serverUrl = 'https://supercode.pockgo.com'; // 默认服务器地址
 let sshSyncIPC; // SSH同步IPC处理器
 let tokenFileMonitor; // Token文件监控器
 
