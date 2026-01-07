@@ -499,7 +499,7 @@ class AppState {
 
         if (expiresAt <= now) {
             return { status: 'expired', message: 'SSO Token已过期', hoursUntilExpiry: 0 };
-        } else if (hoursUntilExpiry <= 12) {
+        } else if (hoursUntilExpiry <= 24) {
             return { status: 'expiring_soon', message: `SSO Token将在${Math.round(hoursUntilExpiry)}小时后过期`, hoursUntilExpiry };
         } else {
             return { status: 'valid', message: 'SSO Token有效', hoursUntilExpiry };
