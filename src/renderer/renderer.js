@@ -669,6 +669,323 @@ class AppState {
     }
 }
 
+// 配额管理器
+class QuotaManager {
+    constructor(appState, logManager) {
+        this.appState = appState;
+        this.logManager = logManager;
+        this.quotaData = null;
+        this.isLoading = false;
+        this.lastFetchTime = null;
+        this.autoRefreshInterval = null;
+    }
+
+    // 获取配额数据
+    async fetchQuota() {
+        if (this.isLoading) {
+            this.logManager.log('配额查询正在进行中...', 'warning');
+            return null;
+        }
+
+        // 检查是否有当前Token
+        if (!this.appState.currentToken || !this.appState.currentToken.accessToken) {
+            this.logManager.log('没有有效的Token，无法查询配额', 'warning');
+            this.hideQuotaSection();
+            return null;
+        }
+
+        try {
+            this.isLoading = true;
+            this.showQuotaLoading();
+
+            const accessToken = this.appState.currentToken.accessToken;
+            const email = this.appState.currentToken.aws_sso_app_session_id || 'unknown';
+
+            this.logManager.log('正在查询配额...', 'info');
+
+            const result = await electronAPI.quota.fetch(accessToken, email);
+
+            if (result.success && result.data) {
+                this.quotaData = result.data;
+                this.lastFetchTime = Date.now();
+                this.updateQuotaDisplay();
+                this.logManager.log('配额查询成功', 'success');
+                return result.data;
+            } else {
+                this.showQuotaError(result.error || '配额查询失败');
+                this.logManager.log(`配额查询失败: ${result.error}`, 'error');
+                return null;
+            }
+        } catch (error) {
+            this.showQuotaError(error.message);
+            this.logManager.log(`配额查询异常: ${error.message}`, 'error');
+            return null;
+        } finally {
+            this.isLoading = false;
+            this.hideQuotaLoading();
+        }
+    }
+
+    // 更新配额显示
+    updateQuotaDisplay() {
+        const quotaSection = document.getElementById('quotaDataSection');
+        const quotaContainer = document.getElementById('quotaDataContainer');
+        const quotaSubscription = document.getElementById('quotaSubscription');
+        const quotaError = document.getElementById('quotaError');
+
+        if (!this.quotaData) {
+            this.hideQuotaSection();
+            return;
+        }
+
+        // 显示配额区域
+        quotaSection.style.display = 'block';
+        quotaError.style.display = 'none';
+
+        // 显示订阅类型
+        if (this.quotaData.subscriptionTier) {
+            quotaSubscription.style.display = 'block';
+            quotaSubscription.innerHTML = this.createSubscriptionBadge(this.quotaData.subscriptionTier);
+        } else if (this.quotaData.isForbidden) {
+            quotaSubscription.style.display = 'block';
+            quotaSubscription.innerHTML = this.createSubscriptionBadge('forbidden');
+        } else {
+            quotaSubscription.style.display = 'none';
+        }
+
+        // 清空并填充配额数据
+        quotaContainer.innerHTML = '';
+
+        if (this.quotaData.isForbidden) {
+            quotaContainer.innerHTML = `
+                <div class="quota-empty">
+                    <span class="icon">⚠️</span>
+                    <span>账号无权限访问配额信息</span>
+                </div>
+            `;
+            return;
+        }
+
+        if (!this.quotaData.models || this.quotaData.models.length === 0) {
+            quotaContainer.innerHTML = `
+                <div class="quota-empty">
+                    <span class="icon">📊</span>
+                    <span>暂无配额数据</span>
+                </div>
+            `;
+            return;
+        }
+
+        // 按模型名称排序并显示
+        const sortedModels = [...this.quotaData.models].sort((a, b) => {
+            // 按指定顺序显示四种模型
+            const priority = {
+                'gemini-3-pro-high': 1,
+                'gemini-3-pro-low': 2,
+                'claude-sonnet-4-5-thinking': 3,
+                'claude-opus-4-5-thinking': 4
+            };
+            const aPriority = priority[a.name] || 100;
+            const bPriority = priority[b.name] || 100;
+            return aPriority - bPriority;
+        });
+
+        sortedModels.forEach(model => {
+            const quotaItem = this.createQuotaItem(model);
+            quotaContainer.appendChild(quotaItem);
+        });
+    }
+
+    // 创建订阅类型徽章
+    createSubscriptionBadge(tier) {
+        const tierLower = tier.toLowerCase();
+        let badgeClass = 'free';
+        let badgeText = 'FREE';
+        let icon = '○';
+
+        if (tierLower.includes('ultra')) {
+            badgeClass = 'ultra';
+            badgeText = 'ULTRA';
+            icon = '💎';
+        } else if (tierLower.includes('pro')) {
+            badgeClass = 'pro';
+            badgeText = 'PRO';
+            icon = '⭐';
+        } else if (tierLower === 'forbidden') {
+            badgeClass = 'forbidden';
+            badgeText = 'FORBIDDEN';
+            icon = '🚫';
+        }
+
+        return `
+            <span class="quota-subscription-badge ${badgeClass}">
+                <span>${icon}</span>
+                <span>${badgeText}</span>
+            </span>
+        `;
+    }
+
+    // 创建配额项
+    createQuotaItem(model) {
+        const { name, percentage, resetTime } = model;
+
+        // 确定状态类
+        let statusClass = 'good';
+        if (percentage < 20) {
+            statusClass = 'danger';
+        } else if (percentage < 50) {
+            statusClass = 'warning';
+        }
+
+        // 格式化模型名称
+        const displayName = this.formatModelName(name);
+
+        // 格式化重置时间
+        const resetTimeDisplay = this.formatResetTime(resetTime);
+
+        const quotaItem = document.createElement('div');
+        quotaItem.className = `quota-item quota-${statusClass}`;
+        quotaItem.innerHTML = `
+            <div class="quota-item-header">
+                <span class="quota-model-name">${displayName}</span>
+                <span class="quota-percentage ${statusClass}">${percentage}%</span>
+            </div>
+            <div class="quota-item-body">
+                <div class="quota-progress">
+                    <div class="quota-progress-bar ${statusClass}" style="width: ${percentage}%"></div>
+                </div>
+                <div class="quota-reset-time">
+                    <span class="icon">⏱️</span>
+                    <span>重置: ${resetTimeDisplay}</span>
+                </div>
+            </div>
+        `;
+
+        return quotaItem;
+    }
+
+    // 格式化模型名称
+    formatModelName(name) {
+        const nameMap = {
+            'gemini-3-pro-high': 'Gemini 3 Pro High',
+            'gemini-3-pro-low': 'Gemini 3 Pro Low',
+            'claude-sonnet-4-5-thinking': 'Claude Sonnet 4.5',
+            'claude-opus-4-5-thinking': 'Claude Opus 4.5'
+        };
+
+        return nameMap[name] || name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    // 格式化重置时间
+    formatResetTime(resetTime) {
+        if (!resetTime) return '未知';
+
+        try {
+            const resetDate = new Date(resetTime);
+            const now = new Date();
+            const diffMs = resetDate.getTime() - now.getTime();
+
+            if (diffMs <= 0) return '已重置';
+
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+            if (diffHours > 24) {
+                const days = Math.floor(diffHours / 24);
+                return `${days}天${diffHours % 24}小时`;
+            } else if (diffHours > 0) {
+                return `${diffHours}小时${diffMinutes}分钟`;
+            } else {
+                return `${diffMinutes}分钟`;
+            }
+        } catch (error) {
+            return '未知';
+        }
+    }
+
+    // 显示配额加载中
+    showQuotaLoading() {
+        const quotaSection = document.getElementById('quotaDataSection');
+        const quotaLoading = document.getElementById('quotaLoading');
+        const quotaContainer = document.getElementById('quotaDataContainer');
+        const quotaError = document.getElementById('quotaError');
+
+        quotaSection.style.display = 'block';
+        quotaLoading.style.display = 'flex';
+        quotaContainer.style.display = 'none';
+        quotaError.style.display = 'none';
+    }
+
+    // 隐藏配额加载中
+    hideQuotaLoading() {
+        const quotaLoading = document.getElementById('quotaLoading');
+        const quotaContainer = document.getElementById('quotaDataContainer');
+
+        quotaLoading.style.display = 'none';
+        quotaContainer.style.display = 'flex';
+    }
+
+    // 显示配额错误
+    showQuotaError(message) {
+        const quotaSection = document.getElementById('quotaDataSection');
+        const quotaError = document.getElementById('quotaError');
+        const quotaContainer = document.getElementById('quotaDataContainer');
+
+        quotaSection.style.display = 'block';
+        quotaError.style.display = 'block';
+        quotaError.innerHTML = `<span class="icon">❌</span> ${message}`;
+        quotaContainer.innerHTML = '';
+    }
+
+    // 隐藏配额区域
+    hideQuotaSection() {
+        const quotaSection = document.getElementById('quotaDataSection');
+        if (quotaSection) {
+            quotaSection.style.display = 'none';
+        }
+    }
+
+    // 设置自动刷新
+    setupAutoRefresh(intervalMinutes = 5) {
+        this.clearAutoRefresh();
+
+        this.autoRefreshInterval = setInterval(() => {
+            if (this.appState.currentToken && this.appState.currentToken.accessToken) {
+                this.fetchQuota();
+            }
+        }, intervalMinutes * 60 * 1000);
+
+        console.log(`配额自动刷新已设置，间隔: ${intervalMinutes}分钟`);
+    }
+
+    // 清除自动刷新
+    clearAutoRefresh() {
+        if (this.autoRefreshInterval) {
+            clearInterval(this.autoRefreshInterval);
+            this.autoRefreshInterval = null;
+        }
+    }
+
+    // 获取配额摘要（用于显示在其他地方）
+    getQuotaSummary() {
+        if (!this.quotaData || !this.quotaData.models) {
+            return null;
+        }
+
+        const models = this.quotaData.models;
+        const avgPercentage = models.reduce((sum, m) => sum + m.percentage, 0) / models.length;
+        const minPercentage = Math.min(...models.map(m => m.percentage));
+
+        return {
+            averagePercentage: Math.round(avgPercentage),
+            minPercentage,
+            modelCount: models.length,
+            subscriptionTier: this.quotaData.subscriptionTier,
+            isForbidden: this.quotaData.isForbidden
+        };
+    }
+}
+
 // 日志管理器
 class LogManager {
     constructor() {
@@ -828,6 +1145,12 @@ class TokenManager {
             if (result.success) {
                 this.appState.setCurrentToken(result.data);
                 this.logManager.log('Token加载成功', 'success');
+                // Token加载成功后，自动刷新配额
+                if (window.app && window.app.quotaManager) {
+                    setTimeout(() => {
+                        window.app.quotaManager.fetchQuota();
+                    }, 500);
+                }
                 return result.data;
             } else {
                 this.logManager.log(`Token加载失败: ${result.error}`, 'error');
@@ -1634,6 +1957,7 @@ class App {
         this.tokenManager = new TokenManager(this.appState, this.logManager, this.modalManager, this.processManager);
         this.serverManager = new ServerManager(this.appState, this.logManager);
         this.versionManager = new VersionManager(this.appState, this.logManager, this.modalManager);
+        this.quotaManager = new QuotaManager(this.appState, this.logManager);
         this.init();
     }
 
@@ -1660,9 +1984,11 @@ class App {
         // 加载续费配置
         await this.loadRenewalConfig();
 
-
         // 检查Token文件监控状态
         await this.checkTokenMonitorStatus();
+
+        // 初始加载配额数据
+        await this.loadQuotaData();
 
         this.logManager.log('应用初始化完成', 'success');
     }
@@ -1683,6 +2009,22 @@ class App {
             }
         } catch (error) {
             this.logManager.log(`Token文件监控器状态检查异常: ${error.message}`, 'error');
+        }
+    }
+
+    // 加载配额数据
+    async loadQuotaData() {
+        try {
+            if (this.appState.currentToken && this.appState.currentToken.accessToken) {
+                this.logManager.log('正在加载配额数据...', 'info');
+                await this.quotaManager.fetchQuota();
+                // 设置配额自动刷新（每5分钟）
+                this.quotaManager.setupAutoRefresh(5);
+            } else {
+                this.logManager.log('没有有效Token，跳过配额加载', 'info');
+            }
+        } catch (error) {
+            this.logManager.log(`配额数据加载失败: ${error.message}`, 'warning');
         }
     }
 
@@ -2208,6 +2550,15 @@ class App {
         electronAPI.onTokenMonitorError((event, errorMessage) => {
             this.logManager.log(`Token文件监控错误: ${errorMessage}`, 'error');
         });
+
+        // 刷新配额按钮
+        const refreshQuotaBtn = document.getElementById('refreshQuotaBtn');
+        if (refreshQuotaBtn) {
+            refreshQuotaBtn.addEventListener('click', async () => {
+                this.logManager.log('手动刷新配额...', 'info');
+                await this.quotaManager.fetchQuota();
+            });
+        }
 
     }
 

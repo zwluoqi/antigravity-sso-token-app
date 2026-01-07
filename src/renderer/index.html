@@ -50,15 +50,15 @@
                             <div class="card-body">
                                 <div class="status-info">
                                     <div class="info-item">
-                                        <label>账号ID:</label>
+                                        <label>账号ID（提前5分钟会自动刷新）:</label>
                                         <span id="currentTokenId">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <label>过期时间:</label>
+                                        <label>账号过期时间:</label>
                                         <span id="tokenExpiry">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <label>最后更新:</label>
+                                        <label>账号最后更新:</label>
                                         <span id="lastUpdate">-</span>
                                     </div>
                                     <!-- Usage Data Section -->
@@ -66,6 +66,28 @@
                                         <div class="usage-title">使用量统计</div>
                                         <div id="usageDataContainer" class="usage-data-container">
                                             <!-- Usage data will be populated here -->
+                                        </div>
+                                    </div>
+                                    <!-- Quota Data Section -->
+                                    <div class="quota-data-section" id="quotaDataSection" style="display: none;">
+                                        <div class="quota-header">
+                                            <div class="quota-title">配额状态</div>
+                                            <button id="refreshQuotaBtn" class="btn btn-outline btn-xs" title="刷新配额">
+                                                <span class="icon">🔄</span>
+                                            </button>
+                                        </div>
+                                        <div class="quota-subscription" id="quotaSubscription" style="display: none;">
+                                            <!-- Subscription tier badge will be shown here -->
+                                        </div>
+                                        <div id="quotaDataContainer" class="quota-data-container">
+                                            <!-- Quota data will be populated here -->
+                                        </div>
+                                        <div class="quota-loading" id="quotaLoading" style="display: none;">
+                                            <span class="spinner-small"></span>
+                                            <span>正在加载配额...</span>
+                                        </div>
+                                        <div class="quota-error" id="quotaError" style="display: none;">
+                                            <!-- Error message will be shown here -->
                                         </div>
                                     </div>
                                 </div>

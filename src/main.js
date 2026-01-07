@@ -13,6 +13,8 @@ const APP_NAME = 'Antigravity SSOToken Manager';
 const SSHSyncIPC = require('./ssh-sync/ssh-sync-ipc');
 // Token文件监控功能
 const TokenFileMonitor = require('./token-file-monitor');
+// 配额查询功能
+const { fetchQuota, formatTimeRemaining } = require('./quota');
 
 // 全局变量
 let mainWindow;
@@ -1215,6 +1217,23 @@ ipcMain.handle('restart-token-monitor', async () => {
     } else {
         return { success: false, error: 'Token文件监控器未初始化' };
     }
+});
+
+// 配额查询相关的IPC处理器
+ipcMain.handle('fetch-quota', async (event, accessToken, email) => {
+    try {
+        console.log('[Quota IPC] 开始查询配额...');
+        const result = await fetchQuota(accessToken, email);
+        console.log('[Quota IPC] 配额查询结果:', result.success ? '成功' : '失败');
+        return result;
+    } catch (error) {
+        console.error('[Quota IPC] 配额查询异常:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('format-time-remaining', (event, resetTime) => {
+    return formatTimeRemaining(resetTime);
 });
 
 // 处理未捕获的异常

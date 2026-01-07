@@ -48,6 +48,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         restart: () => ipcRenderer.invoke('restart-token-monitor')
     },
 
+    // 配额查询
+    quota: {
+        fetch: (accessToken, email) => ipcRenderer.invoke('fetch-quota', accessToken, email),
+        formatTimeRemaining: (resetTime) => ipcRenderer.invoke('format-time-remaining', resetTime)
+    },
+
     // SSH同步功能
     sshSync: {
         // SSH连接管理
