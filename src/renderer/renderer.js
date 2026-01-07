@@ -1697,7 +1697,7 @@ class ProcessManager {
                 this.logManager.log('正在查找Antigravity可执行文件...');
                 const foundPath = await this.findAntigravityExecutable();
                 if (!foundPath) {
-                    this.logManager.log('无法找到Antigravity可执行文件，请手动指定路径', 'error');
+                    this.logManager.log('无法找到Antigravity可执行文件，直接手动打开antigravityt即可', 'error');
                     return false;
                 }
             }

@@ -1060,7 +1060,7 @@ ipcMain.handle('restart-antigravity-process', async (event, antigravityPath) => 
         if (!antigravityPath || !await fs.pathExists(antigravityPath)) {
             return {
                 success: false,
-                error: `找不到Antigravity可执行文件: ${antigravityPath || '未指定'}。请手动指定Antigravity的安装路径。`
+                error: `找不到Antigravity可执行文件: ${antigravityPath || '未指定'}。直接手动打开antigravityt即可`
             };
         }
 
