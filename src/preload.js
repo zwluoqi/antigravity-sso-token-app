@@ -50,6 +50,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
         restart: () => ipcRenderer.invoke('restart-token-monitor')
     },
 
+    // 后台刷新
+    backgroundRefresh: {
+        updateData: (tokenData, ssoToken) => ipcRenderer.invoke('update-background-refresh-data', tokenData, ssoToken),
+        getStatus: () => ipcRenderer.invoke('get-background-refresh-status')
+    },
+
+    // 托盘菜单
+    tray: {
+        refreshMenu: () => ipcRenderer.invoke('refresh-tray-menu')
+    },
+
     // 配额查询
     quota: {
         fetch: (accessToken, email) => ipcRenderer.invoke('fetch-quota', accessToken, email),
@@ -147,6 +158,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     onTokenMonitorError: (callback) => {
         ipcRenderer.on('token-monitor-error', callback);
+    },
+
+    // 后台Token刷新事件
+    onTokenRefreshedBackground: (callback) => {
+        ipcRenderer.on('token-refreshed-background', callback);
+    },
+
+    // 托盘菜单事件
+    onTrayRequestNewToken: (callback) => {
+        ipcRenderer.on('tray-request-new-token', callback);
+    },
+
+    onTrayManualRefresh: (callback) => {
+        ipcRenderer.on('tray-manual-refresh', callback);
     },
 
     // 移除事件监听

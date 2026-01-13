@@ -466,6 +466,8 @@ class AppState {
     async performAutoRefresh() {
         if (this.isProcessing) {
             console.log('正在处理其他请求，跳过自动刷新');
+            // 如果正在处理，1分钟后重试
+            this.scheduleRetryRefresh(1 * 60 * 1000);
             return;
         }
 
@@ -479,11 +481,36 @@ class AppState {
 
             // 通过应用实例获取TokenManager来执行刷新
             if (window.app && window.app.tokenManager) {
-                await window.app.tokenManager.refreshCurrentToken();
+                const success = await window.app.tokenManager.refreshCurrentToken();
+
+                if (!success) {
+                    // 刷新失败，1分钟后重试
+                    console.log('自动刷新Token失败，将在1分钟后重试');
+                    this.scheduleRetryRefresh(1 * 60 * 1000);
+                }
+                // 刷新成功后，setupAutoRefresh 会在 setCurrentToken 中被调用
             }
         } catch (error) {
             console.error('自动刷新Token失败:', error);
+            // 发生异常，1分钟后重试
+            console.log('自动刷新Token异常，将在1分钟后重试');
+            this.scheduleRetryRefresh(1 * 60 * 1000);
         }
+    }
+
+    // 调度重试刷新
+    scheduleRetryRefresh(delay) {
+        // 清除现有定时器
+        if (this.autoRefreshTimer) {
+            clearTimeout(this.autoRefreshTimer);
+            this.autoRefreshTimer = null;
+        }
+
+        console.log(`设置重试刷新定时器，将在 ${Math.round(delay / 1000 / 60)} 分钟后重试`);
+
+        this.autoRefreshTimer = setTimeout(() => {
+            this.performAutoRefresh();
+        }, delay);
     }
 
     // 清除自动刷新定时器
@@ -722,6 +749,14 @@ class QuotaManager {
                 this.lastFetchTime = Date.now();
                 this.updateQuotaDisplay();
                 this.logManager.log('配额查询成功', 'success');
+
+                // 配额获取成功后刷新托盘菜单
+                try {
+                    await electronAPI.tray.refreshMenu();
+                } catch (trayError) {
+                    console.error('刷新托盘菜单失败:', trayError);
+                }
+
                 return result.data;
             } else {
                 this.showQuotaError(result.error || '配额查询失败');
@@ -1157,6 +1192,15 @@ class TokenManager {
             if (result.success) {
                 this.appState.setCurrentToken(result.data);
                 this.logManager.log('Token加载成功', 'success');
+
+                // 同步Token数据到主进程后台刷新（确保托盘菜单能显示数据）
+                try {
+                    await electronAPI.backgroundRefresh.updateData(result.data, this.appState.serverConfig.ssoToken);
+                    this.logManager.log('已同步Token数据到后台服务', 'info');
+                } catch (bgError) {
+                    console.error('同步后台刷新数据失败:', bgError);
+                }
+
                 // Token加载成功后，自动刷新配额
                 if (window.app && window.app.quotaManager) {
                     setTimeout(() => {
@@ -1199,6 +1243,15 @@ class TokenManager {
             if (result.success) {
                 this.appState.setCurrentToken(tokenData);
                 this.logManager.log('Token保存成功', 'success');
+
+                // 同步Token数据到主进程后台刷新
+                try {
+                    await electronAPI.backgroundRefresh.updateData(tokenData, this.appState.serverConfig.ssoToken);
+                    this.logManager.log('已同步Token数据到后台刷新服务', 'info');
+                } catch (bgError) {
+                    console.error('同步后台刷新数据失败:', bgError);
+                }
+
                 return true;
             } else {
                 this.logManager.log(`Token保存失败: ${result.error}`, 'error');
@@ -2563,6 +2616,16 @@ class App {
             this.logManager.log(`Token文件监控错误: ${errorMessage}`, 'error');
         });
 
+        // 后台Token刷新事件
+        electronAPI.onTokenRefreshedBackground((event, newTokenData) => {
+            this.logManager.log('后台Token刷新成功，正在更新UI...', 'success');
+            this.appState.setCurrentToken(newTokenData);
+            // 刷新配额数据
+            if (this.quotaManager) {
+                this.quotaManager.fetchQuota();
+            }
+        });
+
         // 刷新配额按钮
         const refreshQuotaBtn = document.getElementById('refreshQuotaBtn');
         if (refreshQuotaBtn) {
@@ -2571,6 +2634,34 @@ class App {
                 await this.quotaManager.fetchQuota();
             });
         }
+
+        // 托盘菜单事件：申请新号
+        electronAPI.onTrayRequestNewToken(async () => {
+            this.logManager.log('从托盘菜单触发申请新号...', 'info');
+            await this.tokenManager.requestNewToken();
+        });
+
+        // 托盘菜单事件：手动刷新Token
+        electronAPI.onTrayManualRefresh(async () => {
+            this.logManager.log('从托盘菜单触发手动刷新Token...', 'info');
+            if (!this.appState.currentToken) {
+                this.logManager.log('没有当前Token，无法刷新', 'warning');
+                return;
+            }
+
+            if (!this.appState.serverConfig.ssoToken) {
+                this.logManager.log('需要配置SSO Token才能刷新', 'warning');
+                this.modalManager.showSettingsModal(this.appState.serverConfig);
+                return;
+            }
+
+            const success = await this.tokenManager.refreshCurrentToken();
+            if (success) {
+                this.logManager.log('手动刷新Token成功！', 'success');
+            } else {
+                this.logManager.log('手动刷新Token失败', 'error');
+            }
+        });
 
     }
 

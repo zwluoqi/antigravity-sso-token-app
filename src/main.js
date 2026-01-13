@@ -1,5 +1,5 @@
 
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, Tray, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
 const os = require('os');
@@ -19,9 +19,14 @@ const { fetchQuota, formatTimeRemaining } = require('./quota');
 
 // 全局变量
 let mainWindow;
+let tray = null; // 系统托盘
+let isQuitting = false; // 标记是否真正退出应用
 let serverUrl = 'https://supercode.pockgo.com'; // 默认服务器地址
 let sshSyncIPC; // SSH同步IPC处理器
 let tokenFileMonitor; // Token文件监控器
+let backgroundRefreshTimer = null; // 后台Token刷新定时器
+let currentTokenData = null; // 当前Token数据缓存
+let currentSsoToken = null; // 当前SSO Token缓存
 
 // Antigravity 数据目录路径 (参考 Antigravity-Manager)
 const ANTIGRAVITY_SSO_TOKEN_DIR = path.join(os.homedir(), '.antigravity-sso-token-manager');
@@ -106,6 +111,441 @@ function getPortableDbPath() {
 const APP_CONFIG_DIR = path.join(os.homedir(), '.antigravity-sso-token-manager');
 const APP_CONFIG_FILE = path.join(APP_CONFIG_DIR, 'config.json');
 
+// 托盘菜单更新定时器
+let trayMenuUpdateTimer = null;
+
+// 格式化倒计时时间
+function formatCountdown(targetTime) {
+    if (!targetTime) return '未知';
+
+    const now = new Date();
+    const target = new Date(targetTime);
+    const diffMs = target.getTime() - now.getTime();
+
+    if (diffMs <= 0) return '已过期';
+
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const hours = Math.floor(diffSeconds / 3600);
+    const minutes = Math.floor((diffSeconds % 3600) / 60);
+    const seconds = diffSeconds % 60;
+
+    if (hours > 24) {
+        const days = Math.floor(hours / 24);
+        const remainingHours = hours % 24;
+        return `${days}天${remainingHours}小时`;
+    } else if (hours > 0) {
+        return `${hours}小时${minutes}分钟`;
+    } else if (minutes > 0) {
+        return `${minutes}分钟${seconds}秒`;
+    } else {
+        return `${seconds}秒`;
+    }
+}
+
+// 获取配额详细信息（包含每个模型）
+async function getQuotaDetails() {
+    try {
+        if (!currentTokenData || !currentTokenData.accessToken) {
+            return null;
+        }
+
+        const { fetchQuota } = require('./quota');
+        const result = await fetchQuota(currentTokenData.accessToken, currentTokenData.aws_sso_app_session_id || 'unknown');
+
+        if (result.success && result.data && result.data.models) {
+            return {
+                models: result.data.models,
+                subscriptionTier: result.data.subscriptionTier || 'FREE'
+            };
+        }
+        return null;
+    } catch (error) {
+        console.error('获取配额详情失败:', error);
+        return null;
+    }
+}
+
+// 格式化模型名称
+function formatModelName(name) {
+    const nameMap = {
+        'gemini-3-pro-high': 'Gemini High',
+        'gemini-3-pro-low': 'Gemini Low',
+        'claude-sonnet-4-5-thinking': 'Sonnet 4.5',
+        'claude-opus-4-5-thinking': 'Opus 4.5'
+    };
+    return nameMap[name] || name;
+}
+
+// 获取SSO Token过期时间
+async function getSsoTokenExpiry() {
+    try {
+        const config = await loadAppConfig();
+        if (!config.ssoToken) return null;
+
+        // 尝试从配置中获取SSO使用情况
+        if (config.ssoUsage && config.ssoUsage.expiresAt) {
+            return config.ssoUsage.expiresAt;
+        }
+
+        return null;
+    } catch (error) {
+        console.error('获取SSO Token过期时间失败:', error);
+        return null;
+    }
+}
+
+// 创建系统托盘
+function createTray() {
+    // 创建托盘图标
+    const iconPath = path.join(__dirname, 'icon.png');
+    let trayIcon;
+
+    try {
+        trayIcon = nativeImage.createFromPath(iconPath);
+        // macOS托盘图标需要较小的尺寸
+        if (process.platform === 'darwin') {
+            trayIcon = trayIcon.resize({ width: 16, height: 16 });
+        }
+    } catch (error) {
+        console.error('创建托盘图标失败:', error);
+        return;
+    }
+
+    tray = new Tray(trayIcon);
+    tray.setToolTip(APP_NAME);
+
+    // 初始化托盘菜单
+    updateTrayMenu();
+
+    // 设置定时更新托盘菜单（每30秒更新一次倒计时）
+    trayMenuUpdateTimer = setInterval(() => {
+        updateTrayMenu();
+    }, 30000);
+
+    // 右键点击托盘图标时立即更新菜单（确保数据最新）
+    tray.on('right-click', () => {
+        updateTrayMenu();
+    });
+
+    // 点击托盘图标显示窗口
+    tray.on('click', () => {
+        if (mainWindow) {
+            if (mainWindow.isVisible()) {
+                mainWindow.focus();
+            } else {
+                mainWindow.show();
+                mainWindow.focus();
+                // macOS: 确保应用出现在Dock中
+                if (process.platform === 'darwin') {
+                    app.dock.show();
+                }
+            }
+        }
+    });
+
+    // macOS: 双击托盘图标
+    tray.on('double-click', () => {
+        if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+            if (process.platform === 'darwin') {
+                app.dock.show();
+            }
+        }
+    });
+
+    console.log('系统托盘已创建');
+}
+
+// 更新托盘菜单
+async function updateTrayMenu() {
+    if (!tray) return;
+
+    // 计算Token刷新倒计时
+    let refreshCountdown = '未设置';
+    if (currentTokenData && currentTokenData.realExpiresAt) {
+        const refreshTime = new Date(new Date(currentTokenData.realExpiresAt).getTime() - 5 * 60 * 1000);
+        refreshCountdown = formatCountdown(refreshTime);
+    }
+
+    // 获取SSO Token过期倒计时
+    let ssoExpiry = '未配置';
+    const ssoExpiryTime = await getSsoTokenExpiry();
+    if (ssoExpiryTime) {
+        ssoExpiry = formatCountdown(ssoExpiryTime);
+    }
+
+    // 获取配额详情（每个模型分开显示）
+    const quotaDetails = await getQuotaDetails();
+
+    // 获取当前账号信息
+    let accountInfo = '未登录';
+    if (currentTokenData && currentTokenData.aws_sso_app_session_id) {
+        try {
+            const decoded = jwt.decode(currentTokenData.aws_sso_app_session_id);
+            if (decoded && decoded.email) {
+                const email = decoded.email.split('@')[0];
+                const prefix = email.substring(0, 4);
+                const suffix = email.substring(email.length - 4);
+                accountInfo = `${prefix}...${suffix}`;
+            } else {
+                accountInfo = currentTokenData.aws_sso_app_session_id.substring(0, 10) + '...';
+            }
+        } catch (e) {
+            accountInfo = currentTokenData.aws_sso_app_session_id.substring(0, 10) + '...';
+        }
+    }
+
+    // 构建基础菜单项
+    const menuItems = [
+        {
+            label: '显示主窗口',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.show();
+                    mainWindow.focus();
+                    if (process.platform === 'darwin') {
+                        app.dock.show();
+                    }
+                }
+            }
+        },
+        { type: 'separator' },
+        {
+            label: `📧 当前账号: ${accountInfo}`,
+            enabled: false
+        },
+        {
+            label: `⏱️ 下次刷新: ${refreshCountdown}`,
+            enabled: false
+        },
+        {
+            label: `🔑 授权码过期: ${ssoExpiry}`,
+            enabled: false
+        },
+        { type: 'separator' }
+    ];
+
+    // 添加配额状态（每个模型分开显示）
+    if (quotaDetails && quotaDetails.models && quotaDetails.models.length > 0) {
+        menuItems.push({
+            label: `📊 配额 (${quotaDetails.subscriptionTier})`,
+            enabled: false
+        });
+
+        // 按指定顺序排序模型
+        const modelOrder = ['gemini-3-pro-high', 'gemini-3-pro-low', 'claude-sonnet-4-5-thinking', 'claude-opus-4-5-thinking'];
+        const sortedModels = [...quotaDetails.models].sort((a, b) => {
+            const aIndex = modelOrder.indexOf(a.name);
+            const bIndex = modelOrder.indexOf(b.name);
+            return (aIndex === -1 ? 100 : aIndex) - (bIndex === -1 ? 100 : bIndex);
+        });
+
+        sortedModels.forEach(model => {
+            const displayName = formatModelName(model.name);
+            const percentage = model.percentage;
+            let statusIcon = '🟢';
+            if (percentage < 20) {
+                statusIcon = '🔴';
+            } else if (percentage < 50) {
+                statusIcon = '🟡';
+            }
+            menuItems.push({
+                label: `   ${statusIcon} ${displayName}: ${percentage}%`,
+                enabled: false
+            });
+        });
+    } else {
+        menuItems.push({
+            label: '📊 配额: 未知',
+            enabled: false
+        });
+    }
+
+    menuItems.push({ type: 'separator' });
+
+    // 添加操作菜单项
+    menuItems.push(
+        {
+            label: '🆕 申请新号',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.show();
+                    mainWindow.focus();
+                    if (process.platform === 'darwin') {
+                        app.dock.show();
+                    }
+                    mainWindow.webContents.send('tray-request-new-token');
+                }
+            }
+        },
+        {
+            label: '🔄 手动刷新Token',
+            click: () => {
+                if (mainWindow) {
+                    mainWindow.show();
+                    mainWindow.focus();
+                    if (process.platform === 'darwin') {
+                        app.dock.show();
+                    }
+                    mainWindow.webContents.send('tray-manual-refresh');
+                }
+            }
+        },
+        { type: 'separator' },
+        {
+            label: '🚀 启动 Antigravity',
+            click: async () => {
+                try {
+                    console.log('[托盘] 正在启动Antigravity...');
+                    const result = await restartAntigravityFromTray();
+                    if (result.success) {
+                        console.log('[托盘] Antigravity启动成功');
+                    } else {
+                        console.error('[托盘] Antigravity启动失败:', result.error);
+                        dialog.showErrorBox('启动失败', result.error || 'Antigravity启动失败');
+                    }
+                } catch (error) {
+                    console.error('[托盘] Antigravity启动异常:', error);
+                    dialog.showErrorBox('启动失败', error.message);
+                }
+            }
+        },
+        {
+            label: '⏹️ 关闭 Antigravity',
+            click: async () => {
+                try {
+                    console.log('[托盘] 正在关闭Antigravity...');
+                    const result = await closeAntigravityFromTray();
+                    if (result.success) {
+                        console.log('[托盘] Antigravity关闭成功');
+                    } else {
+                        console.error('[托盘] Antigravity关闭失败:', result.error);
+                    }
+                } catch (error) {
+                    console.error('[托盘] Antigravity关闭异常:', error);
+                }
+            }
+        },
+        { type: 'separator' },
+        {
+            label: '退出',
+            click: () => {
+                isQuitting = true;
+                app.quit();
+            }
+        }
+    );
+
+    // 创建托盘菜单
+    const contextMenu = Menu.buildFromTemplate(menuItems);
+    tray.setContextMenu(contextMenu);
+}
+
+// 从托盘关闭Antigravity进程
+async function closeAntigravityFromTray() {
+    return new Promise((resolve) => {
+        if (process.platform === 'win32') {
+            exec('taskkill /f /im Antigravity.exe', (error) => {
+                if (error) {
+                    resolve({ success: true, message: '进程可能已经关闭或不存在' });
+                } else {
+                    resolve({ success: true, message: 'Antigravity进程已关闭' });
+                }
+            });
+        } else if (process.platform === 'darwin') {
+            const osascriptCmd = `osascript -e 'tell application "Antigravity" to quit' 2>/dev/null`;
+            exec(osascriptCmd, () => {
+                setTimeout(() => {
+                    exec('killall Antigravity 2>/dev/null', () => {
+                        resolve({ success: true, message: 'Antigravity进程已关闭' });
+                    });
+                }, 500);
+            });
+        } else {
+            exec('pkill -9 -x antigravity', (error) => {
+                if (error) {
+                    resolve({ success: true, message: '进程可能已经关闭或不存在' });
+                } else {
+                    resolve({ success: true, message: 'Antigravity进程已关闭' });
+                }
+            });
+        }
+    });
+}
+
+// 从托盘启动Antigravity进程
+async function restartAntigravityFromTray() {
+    try {
+        let antigravityPath = null;
+
+        if (process.platform === 'win32') {
+            const localAppData = process.env.LOCALAPPDATA;
+            const possiblePaths = [];
+            if (localAppData) {
+                possiblePaths.push(path.join(localAppData, 'Programs', 'Antigravity', 'Antigravity.exe'));
+            }
+            possiblePaths.push(
+                'C:\\Program Files\\Antigravity\\Antigravity.exe',
+                'C:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
+                path.join(os.homedir(), 'Desktop', 'Antigravity.exe')
+            );
+            for (const p of possiblePaths) {
+                if (await fs.pathExists(p)) {
+                    antigravityPath = p;
+                    break;
+                }
+            }
+        } else if (process.platform === 'darwin') {
+            const possiblePaths = [
+                '/Applications/Antigravity.app',
+                path.join(os.homedir(), 'Applications', 'Antigravity.app')
+            ];
+            for (const p of possiblePaths) {
+                if (await fs.pathExists(p)) {
+                    antigravityPath = p;
+                    break;
+                }
+            }
+        } else {
+            const possiblePaths = [
+                '/usr/bin/antigravity',
+                '/opt/Antigravity/antigravity',
+                path.join(os.homedir(), '.local', 'bin', 'antigravity')
+            ];
+            for (const p of possiblePaths) {
+                if (await fs.pathExists(p)) {
+                    antigravityPath = p;
+                    break;
+                }
+            }
+        }
+
+        if (!antigravityPath) {
+            return { success: false, error: '找不到Antigravity可执行文件，请手动启动' };
+        }
+
+        let antigravityProcess;
+        if (process.platform === 'darwin' && antigravityPath.endsWith('.app')) {
+            antigravityProcess = spawn('open', ['-a', antigravityPath], {
+                detached: true,
+                stdio: 'ignore'
+            });
+        } else {
+            antigravityProcess = spawn(antigravityPath, [], {
+                detached: true,
+                stdio: 'ignore'
+            });
+        }
+
+        antigravityProcess.unref();
+        return { success: true, message: 'Antigravity已启动', pid: antigravityProcess.pid };
+
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
 // 创建主窗口
 function createMainWindow() {
     mainWindow = new BrowserWindow({
@@ -138,7 +578,22 @@ function createMainWindow() {
         }
     });
 
-    // 窗口关闭事件
+    // 窗口关闭事件 - 改为隐藏到托盘而不是关闭
+    mainWindow.on('close', (event) => {
+        if (!isQuitting) {
+            event.preventDefault();
+            mainWindow.hide();
+
+            // macOS: 隐藏Dock图标
+            if (process.platform === 'darwin') {
+                app.dock.hide();
+            }
+
+            console.log('窗口已隐藏到系统托盘');
+        }
+    });
+
+    // 窗口销毁事件
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
@@ -327,10 +782,212 @@ async function saveAppConfig(config) {
     try {
         await fs.ensureDir(APP_CONFIG_DIR);
         await fs.writeJson(APP_CONFIG_FILE, config, { spaces: 2 });
+        // 更新后台刷新所需的SSO Token
+        if (config.ssoToken) {
+            currentSsoToken = config.ssoToken;
+        }
         return true;
     } catch (error) {
         console.error('保存配置失败:', error);
         return false;
+    }
+}
+
+// ====== 后台Token刷新功能 ======
+
+// 设置后台Token刷新定时器
+function setupBackgroundTokenRefresh() {
+    // 清除现有定时器
+    if (backgroundRefreshTimer) {
+        clearTimeout(backgroundRefreshTimer);
+        backgroundRefreshTimer = null;
+    }
+
+    // 检查是否有必要的数据
+    if (!currentTokenData || !currentSsoToken) {
+        console.log('[后台刷新] 缺少Token数据或SSO Token，跳过设置定时器');
+        return;
+    }
+
+    // 检查Token过期时间
+    const realExpiresAt = currentTokenData.realExpiresAt;
+    if (!realExpiresAt) {
+        console.log('[后台刷新] Token没有过期时间，跳过设置定时器');
+        return;
+    }
+
+    const now = new Date();
+    const expiryTime = new Date(realExpiresAt);
+
+    // 计算提前5分钟刷新的时间点
+    const refreshTime = new Date(expiryTime.getTime() - 5 * 60 * 1000);
+    const timeUntilRefresh = refreshTime.getTime() - now.getTime();
+
+    // 如果刷新时间已经过了，立即刷新
+    if (timeUntilRefresh <= 0) {
+        console.log('[后台刷新] Token即将过期，立即执行刷新');
+        performBackgroundTokenRefresh();
+        return;
+    }
+
+    console.log(`[后台刷新] 设置定时器，将在 ${Math.round(timeUntilRefresh / 1000 / 60)} 分钟后刷新Token`);
+
+    // 设置定时器
+    backgroundRefreshTimer = setTimeout(() => {
+        performBackgroundTokenRefresh();
+    }, timeUntilRefresh);
+}
+
+// 执行后台Token刷新
+async function performBackgroundTokenRefresh() {
+    console.log('[后台刷新] 开始执行Token刷新...');
+
+    if (!currentTokenData || !currentSsoToken) {
+        console.log('[后台刷新] 缺少必要信息，无法刷新');
+        scheduleRetryBackgroundRefresh(1 * 60 * 1000); // 1分钟后重试
+        return;
+    }
+
+    try {
+        const tokenId = currentTokenData.aws_sso_app_session_id;
+        if (!tokenId) {
+            console.log('[后台刷新] 缺少tokenId，无法刷新');
+            scheduleRetryBackgroundRefresh(1 * 60 * 1000);
+            return;
+        }
+
+        const fetch = require('node-fetch');
+        const packageJson = require('../package.json');
+
+        console.log('[后台刷新] 正在向服务器发送刷新请求...');
+        const response = await fetch(`${serverUrl}/api-antigravity/refresh-token`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Client-Version': packageJson.version
+            },
+            body: JSON.stringify({
+                tokenId: tokenId,
+                ssoToken: currentSsoToken,
+                clientVersion: packageJson.version
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`服务器响应错误: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            console.log('[后台刷新] Token刷新成功');
+
+            // 更新Token数据
+            const newTokenData = {
+                accessToken: result.data.accessToken,
+                refreshToken: result.data.refreshToken,
+                aws_sso_app_session_id: result.data.tokenId,
+                expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                realExpiresAt: result.data.expiresAt,
+                authMethod: result.data.authMethod,
+                provider: result.data.provider,
+                region: result.data.region
+            };
+
+            // 保存到文件
+            await fs.ensureDir(ANTIGRAVITY_SSO_TOKEN_DIR);
+            await fs.writeJson(ANTIGRAVITY_AUTH_TOKEN_FILE, newTokenData, { spaces: 2 });
+            console.log('[后台刷新] Token已保存到文件');
+
+            // 注入到数据库
+            const dbPath = getAntigravityDbPath();
+            if (dbPath && await fs.pathExists(dbPath)) {
+                try {
+                    await injectTokenToDatabase(dbPath, newTokenData);
+                    console.log('[后台刷新] Token已注入到数据库');
+                } catch (dbError) {
+                    console.error('[后台刷新] 注入数据库失败:', dbError);
+                }
+            }
+
+            // 更新缓存
+            currentTokenData = newTokenData;
+
+            // 通知渲染进程
+            if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+                mainWindow.webContents.send('token-refreshed-background', newTokenData);
+            }
+
+            // 设置下一次刷新
+            setupBackgroundTokenRefresh();
+
+        } else {
+            console.log('[后台刷新] Token刷新失败:', result.error);
+            scheduleRetryBackgroundRefresh(1 * 60 * 1000); // 1分钟后重试
+        }
+
+    } catch (error) {
+        console.error('[后台刷新] Token刷新异常:', error.message);
+        scheduleRetryBackgroundRefresh(1 * 60 * 1000); // 1分钟后重试
+    }
+}
+
+// 调度重试后台刷新
+function scheduleRetryBackgroundRefresh(delay) {
+    if (backgroundRefreshTimer) {
+        clearTimeout(backgroundRefreshTimer);
+        backgroundRefreshTimer = null;
+    }
+
+    console.log(`[后台刷新] 设置重试定时器，将在 ${Math.round(delay / 1000 / 60)} 分钟后重试`);
+
+    backgroundRefreshTimer = setTimeout(() => {
+        performBackgroundTokenRefresh();
+    }, delay);
+}
+
+// 更新后台刷新所需的数据
+function updateBackgroundRefreshData(tokenData, ssoToken) {
+    currentTokenData = tokenData;
+    if (ssoToken) {
+        currentSsoToken = ssoToken;
+    }
+
+    // 重新设置后台刷新定时器
+    setupBackgroundTokenRefresh();
+}
+
+// 清除后台刷新定时器
+function clearBackgroundRefresh() {
+    if (backgroundRefreshTimer) {
+        clearTimeout(backgroundRefreshTimer);
+        backgroundRefreshTimer = null;
+        console.log('[后台刷新] 定时器已清除');
+    }
+}
+
+// 初始化后台刷新（从文件加载Token数据）
+async function initializeBackgroundRefresh() {
+    try {
+        // 加载配置获取SSO Token
+        const config = await loadAppConfig();
+        if (config.ssoToken) {
+            currentSsoToken = config.ssoToken;
+        }
+
+        // 加载Token数据
+        if (await fs.pathExists(ANTIGRAVITY_AUTH_TOKEN_FILE)) {
+            currentTokenData = await fs.readJson(ANTIGRAVITY_AUTH_TOKEN_FILE);
+            console.log('[后台刷新] 已加载Token数据');
+        }
+
+        // 设置后台刷新
+        if (currentTokenData && currentSsoToken) {
+            setupBackgroundTokenRefresh();
+        }
+    } catch (error) {
+        console.error('[后台刷新] 初始化失败:', error);
     }
 }
 
@@ -354,6 +1011,9 @@ app.whenReady().then(async () => {
     // 初始化Token文件监控器
     tokenFileMonitor = new TokenFileMonitor();
 
+    // 创建系统托盘
+    createTray();
+
     // 创建主窗口
     createMainWindow();
 
@@ -362,10 +1022,20 @@ app.whenReady().then(async () => {
 
     // 启动Token文件监控
     await initializeTokenFileMonitor();
+
+    // 初始化后台Token刷新
+    await initializeBackgroundRefresh();
+});
+
+// 应用退出前的清理
+app.on('before-quit', () => {
+    isQuitting = true;
 });
 
 app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
+    // 不在这里退出应用，让托盘继续运行
+    // 只有在 isQuitting 为 true 时才真正退出
+    if (isQuitting) {
         // 清理SSH同步资源
         if (sshSyncIPC) {
             sshSyncIPC.cleanup();
@@ -374,13 +1044,46 @@ app.on('window-all-closed', () => {
         if (tokenFileMonitor) {
             tokenFileMonitor.cleanup();
         }
-        app.quit();
+        // 清理托盘
+        if (tray) {
+            tray.destroy();
+            tray = null;
+        }
     }
 });
 
 app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    // macOS: 点击Dock图标时显示窗口
+    if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+    } else {
         createMainWindow();
+    }
+});
+
+// 应用退出时清理资源
+app.on('quit', () => {
+    console.log('应用正在退出，清理资源...');
+    // 清理后台刷新定时器
+    clearBackgroundRefresh();
+    // 清理托盘菜单更新定时器
+    if (trayMenuUpdateTimer) {
+        clearInterval(trayMenuUpdateTimer);
+        trayMenuUpdateTimer = null;
+    }
+    // 清理SSH同步资源
+    if (sshSyncIPC) {
+        sshSyncIPC.cleanup();
+    }
+    // 清理Token文件监控资源
+    if (tokenFileMonitor) {
+        tokenFileMonitor.cleanup();
+    }
+    // 清理托盘
+    if (tray) {
+        tray.destroy();
+        tray = null;
     }
 });
 
@@ -1245,6 +1948,42 @@ ipcMain.handle('fetch-quota', async (event, accessToken, email) => {
 
 ipcMain.handle('format-time-remaining', (event, resetTime) => {
     return formatTimeRemaining(resetTime);
+});
+
+// 后台刷新相关的IPC处理器
+ipcMain.handle('update-background-refresh-data', (event, tokenData, ssoToken) => {
+    try {
+        updateBackgroundRefreshData(tokenData, ssoToken);
+        // 数据更新后立即刷新托盘菜单
+        updateTrayMenu();
+        return { success: true };
+    } catch (error) {
+        console.error('更新后台刷新数据失败:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('get-background-refresh-status', () => {
+    return {
+        success: true,
+        data: {
+            hasTimer: backgroundRefreshTimer !== null,
+            hasTokenData: currentTokenData !== null,
+            hasSsoToken: currentSsoToken !== null,
+            tokenExpiresAt: currentTokenData?.realExpiresAt || null
+        }
+    };
+});
+
+// 手动触发托盘菜单更新
+ipcMain.handle('refresh-tray-menu', () => {
+    try {
+        updateTrayMenu();
+        return { success: true };
+    } catch (error) {
+        console.error('刷新托盘菜单失败:', error);
+        return { success: false, error: error.message };
+    }
 });
 
 // 处理未捕获的异常
