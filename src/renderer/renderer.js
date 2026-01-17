@@ -1441,6 +1441,16 @@ class TokenManager {
                     // 标记token已被使用，防止二次申请
                     this.markTokenAsUsed(result.data.tokenId);
 
+                    // 刷新配额数据
+                    if (window.app && window.app.quotaManager) {
+                        try {
+                            this.logManager.log('正在刷新配额数据...', 'info');
+                            await window.app.quotaManager.fetchQuota();
+                        } catch (quotaError) {
+                            console.error('刷新配额数据失败:', quotaError);
+                        }
+                    }
+
                     // Token申请成功后，执行Antigravity进程重启（使用独立的try-catch防止崩溃）
                     if (this.processManager) {
                         try {
@@ -1534,6 +1544,16 @@ class TokenManager {
                         this.logManager.log('SSO Token使用情况已更新', 'info');
                     }
 
+                    // 刷新配额数据
+                    if (window.app && window.app.quotaManager) {
+                        try {
+                            this.logManager.log('正在刷新配额数据...', 'info');
+                            await window.app.quotaManager.fetchQuota();
+                        } catch (quotaError) {
+                            console.error('刷新配额数据失败:', quotaError);
+                        }
+                    }
+
                     return true;
                 } else {
                     this.logManager.log('Token刷新成功但保存失败', 'error');
@@ -1615,6 +1635,16 @@ class TokenManager {
                     if (result.data.ssoUsage) {
                         this.appState.setSsoUsage(result.data.ssoUsage);
                         this.logManager.log('SSO Token使用情况已更新', 'info');
+                    }
+
+                    // 刷新配额数据
+                    if (window.app && window.app.quotaManager) {
+                        try {
+                            this.logManager.log('正在刷新配额数据...', 'info');
+                            await window.app.quotaManager.fetchQuota();
+                        } catch (quotaError) {
+                            console.error('刷新配额数据失败:', quotaError);
+                        }
                     }
 
                     return true;
