@@ -8,7 +8,10 @@ const fetch = require('node-fetch');
 // API 配置
 const QUOTA_API_URL = 'https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels';
 const CLOUD_CODE_BASE_URL = 'https://cloudcode-pa.googleapis.com';
-const USER_AGENT = 'antigravity/1.11.3 Darwin/arm64';
+
+// 动态生成 User-Agent，适配不同架构
+const os = require('os');
+const USER_AGENT = `antigravity/1.11.3 ${os.platform()}/${os.arch()}`;
 
 /**
  * 配额数据结构

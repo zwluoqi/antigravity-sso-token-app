@@ -15,6 +15,9 @@
     "build-win": "electron-builder --win",
     "build-win-no-sign": "node build-win-no-sign.js",
     "build-mac": "electron-builder --mac",
+    "build-mac-x64": "electron-builder --mac --x64",
+    "build-mac-arm64": "electron-builder --mac --arm64",
+    "build-mac-universal": "electron-builder --mac --universal",
     "build-linux": "electron-builder --linux",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
@@ -63,9 +66,9 @@
       "buildResources": "assets"
     },
     "forceCodeSigning": false,
-    "nodeGypRebuild": false,
-    "buildDependenciesFromSource": false,
-    "npmRebuild": false,
+    "nodeGypRebuild": true,
+    "buildDependenciesFromSource": true,
+    "npmRebuild": true,
     "asar": true,
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*"
