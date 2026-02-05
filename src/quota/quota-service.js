@@ -152,12 +152,12 @@ async function fetchQuota(accessToken, email = 'unknown') {
                 console.log(`[Quota] API 返回了 ${Object.keys(quotaResponse.models || {}).length} 个模型`);
 
                 // 解析模型配额
-                // 只显示指定的四种模型
+                // 只显示指定的模型
                 const targetModels = [
                     'gemini-3-pro-high',
-                    'claude-sonnet-4-5-thinking',
                     'claude-opus-4-5-thinking',
-                    'gemini-3-pro-low'
+                    'gemini-3-pro-image',
+                    'gemini-3-flash'
                 ];
 
                 if (quotaResponse.models) {

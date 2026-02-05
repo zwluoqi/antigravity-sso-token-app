@@ -169,8 +169,8 @@ async function getQuotaDetails() {
 function formatModelName(name) {
     const nameMap = {
         'gemini-3-pro-high': 'Gemini High',
-        'gemini-3-pro-low': 'Gemini Low',
-        'claude-sonnet-4-5-thinking': 'Sonnet 4.5',
+        'gemini-3-pro-image': 'Gemini Image',
+        'gemini-3-flash': 'Gemini Flash',
         'claude-opus-4-5-thinking': 'Opus 4.5'
     };
     return nameMap[name] || name;
@@ -334,7 +334,7 @@ async function updateTrayMenu() {
         });
 
         // 按指定顺序排序模型
-        const modelOrder = ['gemini-3-pro-high', 'gemini-3-pro-low', 'claude-sonnet-4-5-thinking', 'claude-opus-4-5-thinking'];
+        const modelOrder = ['gemini-3-pro-high', 'gemini-3-image', 'gemini-3-flash', 'claude-opus-4-5-thinking'];
         const sortedModels = [...quotaDetails.models].sort((a, b) => {
             const aIndex = modelOrder.indexOf(a.name);
             const bIndex = modelOrder.indexOf(b.name);
@@ -488,7 +488,13 @@ async function restartAntigravityFromTray() {
             possiblePaths.push(
                 'C:\\Program Files\\Antigravity\\Antigravity.exe',
                 'C:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
-                path.join(os.homedir(), 'Desktop', 'Antigravity.exe')
+                'D:\\Program Files\\Antigravity\\Antigravity.exe',
+                'D:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
+                'E:\\Program Files\\Antigravity\\Antigravity.exe',
+                'E:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
+                path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Antigravity', 'Antigravity.exe'),
+                path.join(os.homedir(), 'Desktop', 'Antigravity.exe'),
+                path.join(process.cwd(), 'Antigravity.exe')
             );
             for (const p of possiblePaths) {
                 if (await fs.pathExists(p)) {
@@ -869,7 +875,7 @@ async function performBackgroundTokenRefresh() {
             body: JSON.stringify({
                 tokenId: tokenId,
                 ssoToken: currentSsoToken,
-                appname: 'kiro',
+                appname: 'antigravity',
                 clientVersion: packageJson.version
             })
         });
@@ -1156,6 +1162,157 @@ ipcMain.handle('save-antigravity-token', async (event, tokenData) => {
     }
 });
 
+// ====== Antigravity 版本检测功能 (参考 Antigravity-Manager/src-tauri/src/modules/version.rs) ======
+
+/**
+ * 获取 Antigravity 版本信息
+ * @returns {Promise<{shortVersion: string, bundleVersion: string}|null>}
+ */
+async function getAntigravityVersion() {
+    try {
+        console.log('[Antigravity版本] 开始检测版本...');
+        
+        if (process.platform === 'darwin') {
+            return await getVersionMacOS();
+        } else if (process.platform === 'win32') {
+            return await getVersionWindows();
+        } else {
+            return await getVersionLinux();
+        }
+    } catch (error) {
+        console.error('[Antigravity版本] 版本检测失败:', error.message);
+        return null;
+    }
+}
+
+/**
+ * macOS: 从 Info.plist 读取版本
+ */
+async function getVersionMacOS() {
+    const plist = require('plist');
+    
+    const possiblePaths = [
+        '/Applications/Antigravity.app',
+        path.join(os.homedir(), 'Applications', 'Antigravity.app')
+    ];
+    
+    for (const appPath of possiblePaths) {
+        const infoPlistPath = path.join(appPath, 'Contents', 'Info.plist');
+        if (await fs.pathExists(infoPlistPath)) {
+            try {
+                const content = await fs.readFile(infoPlistPath, 'utf8');
+                const parsed = plist.parse(content);
+                
+                const shortVersion = parsed.CFBundleShortVersionString;
+                const bundleVersion = parsed.CFBundleVersion || shortVersion;
+                
+                if (shortVersion) {
+                    console.log('[Antigravity版本] macOS版本检测成功:', shortVersion);
+                    return { shortVersion, bundleVersion };
+                }
+            } catch (e) {
+                console.log('[Antigravity版本] 解析Info.plist失败:', e.message);
+            }
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Windows: 从可执行文件元数据读取版本
+ */
+async function getVersionWindows() {
+    const { execSync } = require('child_process');
+    
+    const possiblePaths = [];
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData) {
+        possiblePaths.push(path.join(localAppData, 'Programs', 'Antigravity', 'Antigravity.exe'));
+    }
+    possiblePaths.push(
+        'C:\\Program Files\\Antigravity\\Antigravity.exe',
+        'C:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
+        'D:\\Program Files\\Antigravity\\Antigravity.exe',
+        'D:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
+        'E:\\Program Files\\Antigravity\\Antigravity.exe',
+        'E:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
+        path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Antigravity', 'Antigravity.exe'),
+        path.join(os.homedir(), 'Desktop', 'Antigravity.exe'),
+        path.join(process.cwd(), 'Antigravity.exe')
+    );
+    
+    for (const exePath of possiblePaths) {
+        if (await fs.pathExists(exePath)) {
+            try {
+                const cmd = `powershell -Command "(Get-Item '${exePath}').VersionInfo.FileVersion"`;
+                const version = execSync(cmd, { encoding: 'utf8' }).trim();
+                
+                if (version) {
+                    console.log('[Antigravity版本] Windows版本检测成功:', version);
+                    return { shortVersion: version, bundleVersion: version };
+                }
+            } catch (e) {
+                console.log('[Antigravity版本] PowerShell版本检测失败:', e.message);
+            }
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Linux: 从 package.json 读取版本
+ */
+async function getVersionLinux() {
+    const possiblePaths = [
+        '/opt/Antigravity/resources/app/package.json',
+        '/usr/share/antigravity/resources/app/package.json',
+        path.join(os.homedir(), '.local', 'share', 'antigravity', 'resources', 'app', 'package.json')
+    ];
+    
+    for (const pkgPath of possiblePaths) {
+        if (await fs.pathExists(pkgPath)) {
+            try {
+                const pkg = await fs.readJson(pkgPath);
+                if (pkg.version) {
+                    console.log('[Antigravity版本] Linux版本检测成功:', pkg.version);
+                    return { shortVersion: pkg.version, bundleVersion: pkg.version };
+                }
+            } catch (e) {
+                console.log('[Antigravity版本] 读取package.json失败:', e.message);
+            }
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * 比较版本号
+ * @returns {number} -1: v1 < v2, 0: v1 == v2, 1: v1 > v2
+ */
+function compareVersion(v1, v2) {
+    const parts1 = v1.split('.').map(n => parseInt(n, 10) || 0);
+    const parts2 = v2.split('.').map(n => parseInt(n, 10) || 0);
+    
+    const maxLen = Math.max(parts1.length, parts2.length);
+    for (let i = 0; i < maxLen; i++) {
+        const p1 = parts1[i] || 0;
+        const p2 = parts2[i] || 0;
+        if (p1 > p2) return 1;
+        if (p1 < p2) return -1;
+    }
+    return 0;
+}
+
+/**
+ * 判断是否为新版本 (>= 1.16.5)
+ */
+function isNewVersion(versionInfo) {
+    return compareVersion(versionInfo.shortVersion, '1.16.5') >= 0;
+}
+
 // Token注入到Antigravity数据库
 async function injectTokenToDatabase(dbPath, tokenData) {
     try {
@@ -1190,52 +1347,162 @@ async function injectTokenToDatabase(dbPath, tokenData) {
             throw new Error('accessToken为空，无法注入');
         }
 
-        const Database = require('better-sqlite3');
-        const db = new Database(dbPath);
-        console.log('[Antigravity DB 注入] 数据库已打开');
-
-        // 读取当前数据
-        console.log('[Antigravity DB 注入] 正在读取 jetskiStateSync.agentManagerInitState...');
-        const row = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get('jetskiStateSync.agentManagerInitState');
-
-        if (!row) {
-            db.close();
-            console.error('[Antigravity DB 注入] 数据库中未找到agentManagerInitState');
-            throw new Error('数据库中未找到agentManagerInitState，请先启动一次Antigravity');
+        // 检测 Antigravity 版本
+        const versionInfo = await getAntigravityVersion();
+        
+        if (versionInfo) {
+            console.log('[Antigravity DB 注入] 检测到版本:', versionInfo.shortVersion);
+            
+            if (isNewVersion(versionInfo)) {
+                // >= 1.16.5: 使用新格式
+                console.log('[Antigravity DB 注入] 使用新格式注入 (antigravityUnifiedStateSync.oauthToken)');
+                return await injectNewFormat(dbPath, accessToken, refreshToken, expirySeconds);
+            } else {
+                // < 1.16.5: 使用旧格式
+                console.log('[Antigravity DB 注入] 使用旧格式注入 (jetskiStateSync.agentManagerInitState)');
+                return await injectOldFormat(dbPath, accessToken, refreshToken, expirySeconds);
+            }
+        } else {
+            // 无法检测版本：尝试两种格式
+            console.log('[Antigravity DB 注入] 无法检测版本，尝试双格式注入...');
+            
+            let newFormatSuccess = false;
+            let oldFormatSuccess = false;
+            let newFormatError = null;
+            let oldFormatError = null;
+            
+            // 先尝试新格式
+            try {
+                await injectNewFormat(dbPath, accessToken, refreshToken, expirySeconds);
+                newFormatSuccess = true;
+                console.log('[Antigravity DB 注入] 新格式注入成功');
+            } catch (e) {
+                newFormatError = e.message;
+                console.log('[Antigravity DB 注入] 新格式注入失败:', e.message);
+            }
+            
+            // 再尝试旧格式
+            try {
+                await injectOldFormat(dbPath, accessToken, refreshToken, expirySeconds);
+                oldFormatSuccess = true;
+                console.log('[Antigravity DB 注入] 旧格式注入成功');
+            } catch (e) {
+                oldFormatError = e.message;
+                console.log('[Antigravity DB 注入] 旧格式注入失败:', e.message);
+            }
+            
+            if (newFormatSuccess || oldFormatSuccess) {
+                console.log('[Antigravity DB 注入] Token注入完成 (双格式兼容模式)');
+                return true;
+            } else {
+                throw new Error(`双格式注入均失败 - 新格式: ${newFormatError}, 旧格式: ${oldFormatError}`);
+            }
         }
-        console.log('[Antigravity DB 注入] 已读取到现有数据, 原始长度:', row.value.length);
-
-        // Base64解码
-        const currentData = Buffer.from(row.value, 'base64');
-        console.log('[Antigravity DB 注入] 数据已Base64解码, 长度:', currentData.length);
-
-        // 移除旧的Field 6并创建新的OAuth字段
-        const cleanData = removeProtobufField(currentData, 6);
-        console.log('[Antigravity DB 注入] 已移除旧的Field 6, 清理后长度:', cleanData.length);
-
-        const newField = createOAuthField(accessToken, refreshToken, expirySeconds);
-        console.log('[Antigravity DB 注入] 已创建新OAuth字段, 长度:', newField.length);
-
-        // 合并数据
-        const finalData = Buffer.concat([cleanData, newField]);
-        const finalB64 = finalData.toString('base64');
-        console.log('[Antigravity DB 注入] 数据已合并, 最终长度:', finalData.length);
-        console.log('[Antigravity DB 注入] Base64编码后长度:', finalB64.length);
-
-        // 写入数据库
-        console.log('[Antigravity DB 注入] 正在更新数据库...');
-        db.prepare("UPDATE ItemTable SET value = ? WHERE key = ?").run(finalB64, 'jetskiStateSync.agentManagerInitState');
-        console.log('[Antigravity DB 注入] agentManagerInitState 已更新');
-
-        // 注入Onboarding标记
-        db.prepare("INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)").run('antigravityOnboarding', 'true');
-        console.log('[Antigravity DB 注入] antigravityOnboarding 标记已设置');
-
-        db.close();
-        console.log('[Antigravity DB 注入] 数据库已关闭, Token注入完成');
-        return true;
     } catch (error) {
         console.error('[Antigravity DB 注入] Token注入失败:', error);
+        throw error;
+    }
+}
+
+/**
+ * 新格式注入 (>= 1.16.5)
+ * 参考 Antigravity-Manager/src-tauri/src/modules/db.rs inject_new_format
+ */
+async function injectNewFormat(dbPath, accessToken, refreshToken, expirySeconds) {
+    const Database = require('better-sqlite3');
+    const db = new Database(dbPath);
+    
+    try {
+        console.log('[Antigravity DB 新格式] 开始新格式注入...');
+        
+        // 创建 OAuthTokenInfo (binary)
+        const oauthInfo = createOAuthInfo(accessToken, refreshToken, expirySeconds);
+        const oauthInfoB64 = oauthInfo.toString('base64');
+        console.log('[Antigravity DB 新格式] OAuthTokenInfo 创建完成, 长度:', oauthInfo.length);
+        
+        // InnerMessage2: field 1 = base64(oauth_info)
+        const inner2 = encodeStringField(1, oauthInfoB64);
+        
+        // InnerMessage: field 1 = sentinel key, field 2 = inner2
+        const inner1 = encodeStringField(1, 'oauthTokenInfoSentinelKey');
+        const inner = Buffer.concat([inner1, encodeLenDelimField(2, inner2)]);
+        
+        // OuterMessage: field 1 = inner
+        const outer = encodeLenDelimField(1, inner);
+        const outerB64 = outer.toString('base64');
+        console.log('[Antigravity DB 新格式] OuterMessage 创建完成, Base64长度:', outerB64.length);
+        
+        // 写入数据库
+        db.prepare("INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)").run(
+            'antigravityUnifiedStateSync.oauthToken',
+            outerB64
+        );
+        console.log('[Antigravity DB 新格式] antigravityUnifiedStateSync.oauthToken 已写入');
+        
+        // 注入Onboarding标记
+        db.prepare("INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)").run('antigravityOnboarding', 'true');
+        console.log('[Antigravity DB 新格式] antigravityOnboarding 标记已设置');
+        
+        db.close();
+        console.log('[Antigravity DB 新格式] 新格式注入完成');
+        return true;
+    } catch (error) {
+        db.close();
+        throw error;
+    }
+}
+
+/**
+ * 旧格式注入 (< 1.16.5)
+ * 参考 Antigravity-Manager/src-tauri/src/modules/db.rs inject_old_format
+ */
+async function injectOldFormat(dbPath, accessToken, refreshToken, expirySeconds) {
+    const Database = require('better-sqlite3');
+    const db = new Database(dbPath);
+    
+    try {
+        console.log('[Antigravity DB 旧格式] 开始旧格式注入...');
+        
+        // 读取当前数据
+        const row = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get('jetskiStateSync.agentManagerInitState');
+        
+        if (!row) {
+            throw new Error('旧格式键不存在，可能是新版本Antigravity');
+        }
+        console.log('[Antigravity DB 旧格式] 已读取到现有数据, 原始长度:', row.value.length);
+        
+        // Base64解码
+        const currentData = Buffer.from(row.value, 'base64');
+        console.log('[Antigravity DB 旧格式] 数据已Base64解码, 长度:', currentData.length);
+        
+        // 移除旧字段 (Field 1: UserID, Field 2: Email, Field 6: OAuthTokenInfo)
+        let cleanData = removeProtobufField(currentData, 1);
+        cleanData = removeProtobufField(cleanData, 2);
+        cleanData = removeProtobufField(cleanData, 6);
+        console.log('[Antigravity DB 旧格式] 已移除旧字段, 清理后长度:', cleanData.length);
+        
+        // 创建新的OAuth字段
+        const newField = createOAuthField(accessToken, refreshToken, expirySeconds);
+        console.log('[Antigravity DB 旧格式] 已创建新OAuth字段, 长度:', newField.length);
+        
+        // 合并数据 (不重新注入Field 1 UserID，强制客户端用新Token重新认证)
+        const finalData = Buffer.concat([cleanData, newField]);
+        const finalB64 = finalData.toString('base64');
+        console.log('[Antigravity DB 旧格式] 数据已合并, 最终长度:', finalData.length);
+        
+        // 写入数据库
+        db.prepare("UPDATE ItemTable SET value = ? WHERE key = ?").run(finalB64, 'jetskiStateSync.agentManagerInitState');
+        console.log('[Antigravity DB 旧格式] agentManagerInitState 已更新');
+        
+        // 注入Onboarding标记
+        db.prepare("INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)").run('antigravityOnboarding', 'true');
+        console.log('[Antigravity DB 旧格式] antigravityOnboarding 标记已设置');
+        
+        db.close();
+        console.log('[Antigravity DB 旧格式] 旧格式注入完成');
+        return true;
+    } catch (error) {
+        db.close();
         throw error;
     }
 }
@@ -1254,6 +1521,53 @@ function encodeVarint(value) {
     }
     bytes.push(Number(value));
     return Buffer.from(bytes);
+}
+
+/**
+ * 编码长度分隔字段 (wire_type = 2)
+ * 用于新格式注入
+ */
+function encodeLenDelimField(fieldNum, data) {
+    const tag = (fieldNum << 3) | 2;
+    return Buffer.concat([
+        encodeVarint(tag),
+        encodeVarint(data.length),
+        data
+    ]);
+}
+
+/**
+ * 编码字符串字段 (wire_type = 2)
+ * 用于新格式注入
+ */
+function encodeStringField(fieldNum, value) {
+    return encodeLenDelimField(fieldNum, Buffer.from(value, 'utf8'));
+}
+
+/**
+ * 创建 OAuthTokenInfo 消息（不包含 Field 6 包装，用于新格式）
+ * 参考 Antigravity-Manager/src-tauri/src/utils/protobuf.rs create_oauth_info
+ */
+function createOAuthInfo(accessToken, refreshToken, expirySeconds) {
+    // Field 1: access_token
+    const field1 = encodeStringField(1, accessToken);
+    
+    // Field 2: token_type = "Bearer"
+    const field2 = encodeStringField(2, 'Bearer');
+    
+    // Field 3: refresh_token
+    const field3 = encodeStringField(3, refreshToken);
+    
+    // Field 4: expiry (嵌套的 Timestamp 消息)
+    const timestampTag = (1 << 3) | 0; // Field 1, varint
+    const timestampMsg = Buffer.concat([
+        encodeVarint(timestampTag),
+        encodeVarint(expirySeconds)
+    ]);
+    const field4 = encodeLenDelimField(4, timestampMsg);
+    
+    // 合并所有字段为 OAuthTokenInfo 消息
+    return Buffer.concat([field1, field2, field3, field4]);
 }
 
 /**
@@ -1454,7 +1768,7 @@ ipcMain.handle('request-token-from-server', async (event, currentTokenId, ssoTok
                 currentTokenId: currentTokenId,
                 requestId: Date.now().toString(),
                 ssoToken: ssoToken,
-                appname: 'kiro',
+                appname: 'antigravity',
                 clientVersion: packageJson.version
             })
         });
@@ -1519,7 +1833,7 @@ ipcMain.handle('refresh-token-from-server', async (event, tokenId, ssoToken) => 
             body: JSON.stringify({
                 tokenId: tokenId,
                 ssoToken: ssoToken,
-                appname: 'kiro',
+                appname: 'antigravity',
                 clientVersion: packageJson.version
             })
         });
@@ -1572,7 +1886,7 @@ ipcMain.handle('get-soo-hold-token', async (event, ssoToken) => {
             },
             body: JSON.stringify({
                 ssoToken: ssoToken,
-                appname: 'kiro',
+                appname: 'antigravity',
                 clientVersion: packageJson.version
             })
         });
@@ -1711,6 +2025,10 @@ ipcMain.handle('restart-antigravity-process', async (event, antigravityPath) => 
                     const alternatePaths = [
                         'C:\\Program Files\\Antigravity\\Antigravity.exe',
                         'C:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
+                        'D:\\Program Files\\Antigravity\\Antigravity.exe',
+                        'D:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
+                        'E:\\Program Files\\Antigravity\\Antigravity.exe',
+                        'E:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
                         path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Antigravity', 'Antigravity.exe'),
                         path.join(os.homedir(), 'Desktop', 'Antigravity.exe'),
                         path.join(process.cwd(), 'Antigravity.exe')
@@ -1818,6 +2136,10 @@ ipcMain.handle('find-antigravity-executable', async () => {
             possiblePaths.push(
                 'C:\\Program Files\\Antigravity\\Antigravity.exe',
                 'C:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
+                'D:\\Program Files\\Antigravity\\Antigravity.exe',
+                'D:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
+                'E:\\Program Files\\Antigravity\\Antigravity.exe',
+                'E:\\Program Files (x86)\\Antigravity\\Antigravity.exe',
                 path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Antigravity', 'Antigravity.exe'),
                 path.join(os.homedir(), 'Desktop', 'Antigravity.exe'),
                 path.join(process.cwd(), 'Antigravity.exe')

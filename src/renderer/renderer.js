@@ -825,11 +825,11 @@ class QuotaManager {
 
         // 按模型名称排序并显示
         const sortedModels = [...this.quotaData.models].sort((a, b) => {
-            // 按指定顺序显示四种模型
+            // 按指定顺序显示模型
             const priority = {
                 'gemini-3-pro-high': 1,
-                'gemini-3-pro-low': 2,
-                'claude-sonnet-4-5-thinking': 3,
+                'gemini-3-pro-image': 2,
+                'gemini-3-flash': 3,
                 'claude-opus-4-5-thinking': 4
             };
             const aPriority = priority[a.name] || 100;
@@ -915,8 +915,8 @@ class QuotaManager {
     formatModelName(name) {
         const nameMap = {
             'gemini-3-pro-high': 'Gemini 3 Pro High',
-            'gemini-3-pro-low': 'Gemini 3 Pro Low',
-            'claude-sonnet-4-5-thinking': 'Claude Sonnet 4.5',
+            'gemini-3-pro-image': 'Gemini 3 Image',
+            'gemini-3-flash': 'Gemini 3 Flash',
             'claude-opus-4-5-thinking': 'Claude Opus 4.5'
         };
 
@@ -1896,7 +1896,7 @@ class VersionManager {
                 },
                 body: JSON.stringify({
                     currentVersion: this.currentVersion,
-                    appname: 'kiro',
+                    appname: 'antigravity',
                     platform: platform
                 })
             });
