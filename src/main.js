@@ -869,6 +869,7 @@ async function performBackgroundTokenRefresh() {
             body: JSON.stringify({
                 tokenId: tokenId,
                 ssoToken: currentSsoToken,
+                appname: 'kiro',
                 clientVersion: packageJson.version
             })
         });
@@ -1453,6 +1454,7 @@ ipcMain.handle('request-token-from-server', async (event, currentTokenId, ssoTok
                 currentTokenId: currentTokenId,
                 requestId: Date.now().toString(),
                 ssoToken: ssoToken,
+                appname: 'kiro',
                 clientVersion: packageJson.version
             })
         });
@@ -1517,6 +1519,7 @@ ipcMain.handle('refresh-token-from-server', async (event, tokenId, ssoToken) => 
             body: JSON.stringify({
                 tokenId: tokenId,
                 ssoToken: ssoToken,
+                appname: 'kiro',
                 clientVersion: packageJson.version
             })
         });
@@ -1569,6 +1572,7 @@ ipcMain.handle('get-soo-hold-token', async (event, ssoToken) => {
             },
             body: JSON.stringify({
                 ssoToken: ssoToken,
+                appname: 'kiro',
                 clientVersion: packageJson.version
             })
         });

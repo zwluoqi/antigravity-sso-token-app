@@ -1896,6 +1896,7 @@ class VersionManager {
                 },
                 body: JSON.stringify({
                     currentVersion: this.currentVersion,
+                    appname: 'kiro',
                     platform: platform
                 })
             });
