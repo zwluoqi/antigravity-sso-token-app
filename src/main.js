@@ -50,6 +50,20 @@ function getAntigravityDbPath() {
         const appData = process.env.APPDATA;
         if (appData) {
             dbPath = path.join(appData, 'Antigravity', 'User', 'globalStorage', 'state.vscdb');
+            if(!fs.existsSync(dbPath)) {
+                dbPath = path.join(appData.replace('C:', 'D:'), 'Antigravity', 'User', 'globalStorage', 'state.vscdb');
+                if(!fs.existsSync(dbPath)) {
+                    dbPath = path.join(appData.replace('C:', 'E:'), 'Antigravity', 'User', 'globalStorage', 'state.vscdb');
+                    if(!fs.existsSync(dbPath)) {
+                        dbPath = path.join(appData.replace('C:', 'F:'), 'Antigravity', 'User', 'globalStorage', 'state.vscdb');
+                        if(!fs.existsSync(dbPath)) {
+                            dbPath = '';
+                            console.log('[Antigravity路径] 数据库文件不存在，跳过注入');
+                            return null;
+                        }
+                    }
+                }
+            }
         }
     } else if (process.platform === 'darwin') {
         dbPath = path.join(os.homedir(), 'Library', 'Application Support', 'Antigravity', 'User', 'globalStorage', 'state.vscdb');
@@ -74,16 +88,31 @@ function getPortableDbPath() {
 
             if (programFiles) {
                 possiblePaths.push(path.join(programFiles, 'Antigravity'));
+                possiblePaths.push(path.join(programFiles.replace('C:', 'D:'), 'Antigravity'));
+                possiblePaths.push(path.join(programFiles.replace('C:', 'E:'), 'Antigravity'));
+                possiblePaths.push(path.join(programFiles.replace('C:', 'F:'), 'Antigravity'));
             }
             if (programFilesX86) {
                 possiblePaths.push(path.join(programFilesX86, 'Antigravity'));
+                possiblePaths.push(path.join(programFilesX86.replace('C:', 'D:'), 'Antigravity'));
+                possiblePaths.push(path.join(programFilesX86.replace('C:', 'E:'), 'Antigravity'));
+                possiblePaths.push(path.join(programFilesX86.replace('C:', 'F:'), 'Antigravity'));
             }
             if (localAppData) {
                 possiblePaths.push(path.join(localAppData, 'Programs', 'Antigravity'));
+                possiblePaths.push(path.join(localAppData.replace('C:', 'D:'), 'Programs', 'Antigravity'));
+                possiblePaths.push(path.join(localAppData.replace('C:', 'E:'), 'Programs', 'Antigravity'));
+                possiblePaths.push(path.join(localAppData.replace('C:', 'F:'), 'Programs', 'Antigravity'));
             }
             // 用户主目录下的常见位置
             possiblePaths.push(path.join(os.homedir(), 'Antigravity'));
+            possiblePaths.push(path.join(os.homedir().replace('C:', 'D:'), 'Antigravity'));
+            possiblePaths.push(path.join(os.homedir().replace('C:', 'E:'), 'Antigravity'));
+            possiblePaths.push(path.join(os.homedir().replace('C:', 'F:'), 'Antigravity'));
             possiblePaths.push(path.join(os.homedir(), 'Desktop', 'Antigravity'));
+            possiblePaths.push(path.join(os.homedir().replace('C:', 'D:'), 'Desktop', 'Antigravity'));
+            possiblePaths.push(path.join(os.homedir().replace('C:', 'E:'), 'Desktop', 'Antigravity'));
+            possiblePaths.push(path.join(os.homedir().replace('C:', 'F:'), 'Desktop', 'Antigravity'));
         } else if (process.platform === 'darwin') {
             possiblePaths.push('/Applications/Antigravity.app/Contents/Resources');
             possiblePaths.push(path.join(os.homedir(), 'Applications', 'Antigravity.app', 'Contents', 'Resources'));
@@ -1152,6 +1181,7 @@ ipcMain.handle('save-antigravity-token', async (event, tokenData) => {
             }
         } else {
             console.log('[Antigravity DB] 数据库文件不存在，跳过注入');
+            return { success: false, error: '数据库文件不存在，跳过注入' };
         }
 
         console.log('[Antigravity Token] Token保存完成');
