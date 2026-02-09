@@ -67,9 +67,8 @@
     },
     "forceCodeSigning": false,
     "nodeGypRebuild": false,
-    "buildDependenciesFromSource": true,
-    "npmRebuild": true,
-    "nativeRebuilder": "sequential",
+    "buildDependenciesFromSource": false,
+    "npmRebuild": false,
     "asar": true,
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*"
