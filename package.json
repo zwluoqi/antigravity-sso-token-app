@@ -1,6 +1,6 @@
 {
   "name": "antigravity-sso-token-app",
-  "version": "1.6.9",
+  "version": "1.7.1",
   "description": "Antigravity SSOToken Manager - 跨平台native应用用于管理Antigravity SSOToken",
   "homepage": "https://github.com/antigravity-team/antigravity-sso-token-app",
   "main": "src/main.js",

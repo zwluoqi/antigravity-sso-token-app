@@ -829,8 +829,8 @@ class QuotaManager {
             const priority = {
                 'gemini-3-pro-high': 1,
                 'gemini-3-pro-image': 2,
-                'gemini-3-flash': 3,
-                'claude-opus-4-5-thinking': 4
+                'claude-sonnet-4-6-thinking': 3,
+                'claude-opus-4-6-thinking': 4
             };
             const aPriority = priority[a.name] || 100;
             const bPriority = priority[b.name] || 100;
@@ -916,8 +916,8 @@ class QuotaManager {
         const nameMap = {
             'gemini-3-pro-high': 'Gemini 3 Pro High',
             'gemini-3-pro-image': 'Gemini 3 Image',
-            'gemini-3-flash': 'Gemini 3 Flash',
-            'claude-opus-4-5-thinking': 'Claude Opus 4.5'
+            'claude-sonnet-4-6-thinking': 'Claude Sonnet 4.6',
+            'claude-opus-4-6-thinking': 'Claude Opus 4.6'
         };
 
         return nameMap[name] || name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());

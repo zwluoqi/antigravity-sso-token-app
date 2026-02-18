@@ -158,9 +158,9 @@ async function fetchQuota(accessToken, email = 'unknown') {
                 // 只显示指定的模型
                 const targetModels = [
                     'gemini-3-pro-high',
-                    'claude-opus-4-5-thinking',
+                    'claude-opus-4-6-thinking',
                     'gemini-3-pro-image',
-                    'gemini-3-flash'
+                    'claude-sonnet-4-6-thinking'
                 ];
 
                 if (quotaResponse.models) {
