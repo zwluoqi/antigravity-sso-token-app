@@ -4,7 +4,7 @@
 
 1. 克隆项目并进入目录：
 ```bash
-cd kiro-account-app
+cd antigravity-sso-token-app
 ```
 
 2. 安装依赖：
